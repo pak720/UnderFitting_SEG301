@@ -6,23 +6,22 @@ import requests
 import csv
 import time
 import os
+import re
 from bs4 import BeautifulSoup
 from requests.exceptions import RequestException
 
 BASE_DOMAIN = "https://www.tratencongty.com"
-OUTPUT_FILE = "Data_tratencongty.csv"
-#page 107 bỏ vân nam
+OUTPUT_FILE = "Data_tratencongty_clean.csv"
 
-START_PAGE = 126     # page bắt đầu
-END_PAGE = 130      # page kết thúc
+START_PAGE = 157     # page bắt đầu
+END_PAGE = 160      # page kết thúc
 START_ROW = 0       # resume theo dòng toàn cục
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0"
 }
 
-# ========================
-# KHỞI TẠO FILE KẾT QUẢ
+# ========================# KHỞI TẠO FILE KẾT QUẢ
 # ========================
 if not os.path.exists(OUTPUT_FILE):
     with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
@@ -147,7 +146,18 @@ def crawl_detail_page(detail_url, retry=3):
     print("      ❌ Failed after retries")
     return None
 
+#=========================
+# CLEAN TEXT
+#=========================
+def clean_field(text):
+    if not text:
+        return ""
 
+    text = text.strip()
+    text = re.sub(r"[()]", "", text)
+    text = re.sub(r"\s+", " ", text)
+
+    return text
 
 # ========================
 # CHƯƠNG TRÌNH CHÍNH
@@ -179,7 +189,8 @@ with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
                 global_row += 1
                 continue
 
-            writer.writerow([
+            # Tạo row ban đầu
+            row = [
                 detail.get("company_name") or name,
                 detail.get("mst", ""),
                 detail.get("address", ""),
@@ -187,8 +198,15 @@ with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
                 detail.get("license_date", ""),
                 detail.get("active_date", ""),
                 detail.get("status", ""),
-                link
-            ])
+                clean_field(link)
+            ]
+
+            # Lọc bỏ cột trống
+            row = [col for col in row if col.strip() != '']
+            row = [clean_field(col) for col in row]
+
+            # Ghi row đã lọc vào CSV
+            writer.writerow(row)
 
             print("    ✅ Saved")
             global_row += 1

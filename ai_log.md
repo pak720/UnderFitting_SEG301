@@ -171,4 +171,23 @@ Cung cấp phiên bản code hoàn chỉnh, đã sửa tất cả lỗi schema, 
 Giải thích nguy cơ bị chặn (429, 403), hướng dẫn thêm delay hợp lý sau mỗi request chi tiết bằng `await asyncio.sleep(0.5 + random.uniform(0, 0.3))` để tránh pattern bot.
 
 ---
+## Date: 2026-01-10
+**Task**: Xử lý CSV để loại bỏ cột trống và tự động làm sạch khi crawl
 
+**User**: Tôi muốn xóa luôn cột trống giữa ,,, chỉ để lại cột trước và sau.
+
+**AI (ChatGPT)**:
+Giải thích rằng ,, trong CSV đại diện cho cột trống, không phải dấu phẩy liên tiếp trong văn bản. Đề xuất dùng module csv của Python để đọc, loại bỏ cột trống và xuất CSV mới, đảm bảo không phá hỏng dấu phẩy trong các chuỗi có nháy kép.
+
+---
+
+## Date: 2026-01-10
+**Task**: Áp dụng logic làm sạch code trong code crawl
+
+***User**: Tôi muốn thêm logic [col for col in lines if col.strip() != ''] ngay lúc viết dữ liệu vào file trong code crawl. Đây là code của tôi, hãy xem và sửa.
+
+**AI (ChatGPT)**:
+Gợi ý tích hợp lọc cột trống ngay khi ghi CSV trong vòng lặp crawl. Giải thích:
+- Mỗi dòng dữ liệu tự động loại bỏ cột trống ngay khi crawl xong.
+- Dấu phẩy trong các cột khác, ví dụ địa chỉ, vẫn được giữ nguyên.
+- Vẫn giữ delay giữa các request để tránh bị chặn, đảm bảo crawl ổn định.
