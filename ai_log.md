@@ -1,0 +1,174 @@
+# AI INTERACTION LOG
+
+## Date: 2026-01-08
+
+**Task:** Xây dựng hệ thống crawl hồ sơ doanh nghiệp (BizInfo & Review 360)
+
+**User:** Tôi cần một số website có thể crawl dữ liệu doanh nghiệp, phục vụ bài toán BizInfo & Review 360, bao gồm thông tin pháp lý (nguồn sạch) và review/bình luận (nguồn bẩn). Thách thức là merge dữ liệu dựa trên tên công ty hoặc mã số thuế.
+
+**AI (ChatGPT):** Gợi ý các nguồn dữ liệu doanh nghiệp phổ biến tại Việt Nam (nguồn danh bạ doanh nghiệp, trang thông tin công ty, trang review), đồng thời phân tích kiến trúc list–detail crawler và vấn đề data merging theo tên công ty/MST.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Viết code crawler list–detail và lưu CSV
+
+**User:** Hãy viết code crawl, lưu dữ liệu dạng dòng CSV, có log đang crawl tới trang nào, dòng nào, và có thể chọn bắt đầu crawl từ dòng bất kỳ để resume.
+
+**AI (ChatGPT):** Cung cấp skeleton crawler Python (requests + BeautifulSoup), hỗ trợ resume bằng START_ROW, log chi tiết tiến trình crawl, và cấu trúc CSV phù hợp cho dữ liệu doanh nghiệp.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Debug lỗi crawler chạy nhưng CSV trống
+
+**User:** Code vẫn chạy nhưng file CSV trống. Kiểm tra thì `len(companies)=0`.
+
+**AI (ChatGPT):** Phân tích nguyên nhân selector HTML không khớp DOM thực tế. Hướng dẫn kiểm tra lại cấu trúc `div.search-results` và thẻ `<a href>` chứa link công ty.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Debug lỗi không tìm thấy công ty do DOM phức tạp
+
+**User:** Thông tin công ty nằm trong `div.search-results`, bên trong là thẻ `<a>` chứa tên, và các thẻ `<p>` khác. Code hiện tại không parse được.
+
+**AI (ChatGPT):** Điều chỉnh selector BeautifulSoup cho đúng DOM, giải thích cách duyệt từng block kết quả, lấy tên và link chi tiết chính xác.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Crawl trang chi tiết và kiểm soát việc theo link
+
+**User:** Tôi muốn chỉ vào link chi tiết 1 lần, không theo các link con bên trong. Trang chi tiết có cấu trúc `div.jumbotron`.
+
+**AI (ChatGPT):** Viết hàm `crawl_detail_page()` chỉ parse text trong `div.jumbotron`, không crawl link con, trích xuất các trường: tên công ty, MST, địa chỉ, đại diện pháp luật, ngày cấp phép, trạng thái.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Debug lỗi timeout và mất tên công ty trong CSV
+
+**User:** Một số trang bị `Read timed out`. Có trang in ra tên trong log nhưng khi ghi CSV thì mất tên.
+
+**AI (ChatGPT):** Phân tích hai lỗi chính: (1) request bị treo do thiếu timeout/retry; (2) logic lấy tên công ty dựa vào text line không ổn định. Đề xuất retry mechanism, lấy tên trực tiếp từ DOM (`h4 span[title]`) và chỉ ghi CSV khi crawl detail thành công.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Chuẩn hóa chương trình chính (main loop)
+
+**User:** Hãy viết lại chương trình chính tương ứng với code đã sửa.
+
+**AI (ChatGPT):** Cung cấp main loop chuẩn crawler production: mở CSV một lần, log rõ ROW, skip khi detail fail, đảm bảo không mất dữ liệu và có thể resume bằng START_ROW.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Mở rộng crawler để crawl nhiều page list
+
+**User:** Tôi muốn thêm vòng lặp để crawl nhiều page theo cấu trúc `?page=18`.
+
+**AI (ChatGPT):** Thiết kế vòng lặp page–row toàn cục, tách `BASE_DOMAIN` và tham số page, đảm bảo link detail đúng, hỗ trợ resume theo dòng và log rõ PAGE | ROW.
+
+---
+
+## Date: 2026-01-08
+
+**Task:** Refactor file code hoàn chỉnh
+
+**User:** Đây là toàn bộ file hiện tại, hãy sửa lại.
+
+**AI (ChatGPT):** Phát hiện lỗi ghép URL (`BASE_URL` chứa `?page=`), refactor thành `BASE_DOMAIN`, chuẩn hóa hàm crawl list theo page, giữ nguyên logic crawl detail, và viết lại chương trình chính crawl nhiều page ổn định.
+
+---
+
+# AI INTERACTION LOG
+
+## Date: 2026-01-10
+**Task:** Tìm nguồn dữ liệu để crawl thông tin doanh nghiệp (Thông tin pháp lý, Thuế, Review)
+
+**User:** Ngoài các trang tratencongty, reviewcongty, thongtincongty, careerlink thì còn trang web nào có thể crawl thông tin công ty không?
+
+**AI (ChatGPT):**  
+Đề xuất thêm nhiều nguồn dữ liệu trong và ngoài nước như Masothue.vn, Doanhnghiepmoi.vn, Hosocongty.vn, Sosanhcongty.com, JobStreet, OpenCorporates… Đồng thời phân loại rõ theo mục tiêu dữ liệu (thông tin pháp lý, review, dữ liệu quốc tế) và lưu ý về giới hạn dữ liệu thuế chi tiết do ràng buộc pháp lý.
+
+---
+
+## Date: 2026-01-10
+**Task:** Thiết kế crawler cho website hsctvn.com
+
+**User:** Hãy viết cho tôi code để crawl dữ liệu từ trang web hsctvn.com, có phân trang, có trang chi tiết, hỗ trợ resume, yêu cầu dùng async hoặc multithreading.
+
+**AI (ChatGPT):**  
+Thiết kế kiến trúc crawler 2 tầng (list page → detail page) sử dụng `aiohttp + asyncio`, có cấu hình `START_PAGE`, `END_PAGE`, `START_ROW`, sử dụng Semaphore để giới hạn concurrent requests, ghi CSV từng dòng để tránh mất dữ liệu khi bị ngắt.
+
+---
+
+## Date: 2026-01-10
+**Task:** Tinh chỉnh selector HTML theo cấu trúc thực tế
+
+**User:** Tôi gửi ảnh HTML của trang danh sách và trang chi tiết, hãy sửa code để lấy đúng thẻ.
+
+**AI (ChatGPT):**  
+Phân tích cấu trúc HTML thực tế (`ul.hsdn`, `ul.hsct`), sửa selector chính xác để lấy link công ty và thông tin chi tiết. Áp dụng cách parse dựa trên nhãn tiếng Việt thay vì vị trí thẻ nhằm tăng độ ổn định khi giao diện thay đổi.
+
+---
+
+## Date: 2026-01-10
+**Task:** Bổ sung retry và log HTTP status
+
+**User:** Thêm cho tôi phần retry khi timeout và in HTTP (200, 404, …).
+
+**AI (ChatGPT):**  
+Bổ sung cơ chế retry có kiểm soát cho timeout và lỗi 5xx, không retry với 404. In log HTTP status cho từng request, thêm backoff nhẹ giữa các lần retry để tránh gây tải đột ngột cho server.
+
+---
+
+## Date: 2026-01-10
+**Task:** Crawl đầy đủ thông tin công ty (tiếng Việt có dấu)
+
+**User:** Sửa `parse_company_page` để lấy full data vì trang còn nhiều thông tin khác, và đảm bảo tiếng Việt có dấu.
+
+**AI (ChatGPT):**  
+Viết lại hàm parse theo hướng đọc nhãn–giá trị (label → value), lấy đầy đủ các trường như tên công ty, tên viết tắt, mã số thuế, địa chỉ, đại diện pháp luật, điện thoại, email, ngày cấp, trạng thái. Giữ nguyên Unicode UTF-8 để bảo toàn tiếng Việt có dấu.
+
+---
+
+## Date: 2026-01-10
+**Task:** Debug lỗi ghi CSV (`dict contains fields not in fieldnames`)
+
+**User:** Khi chạy thì gặp lỗi ValueError do dict chứa field không có trong fieldnames.
+
+**AI (ChatGPT):**  
+Chỉ ra nguyên nhân do schema dữ liệu không đồng bộ giữa `DictWriter` và dict trả về. Hướng dẫn sửa bằng cách định nghĩa `FIELDNAMES` đầy đủ và dùng thống nhất cho mọi lần ghi CSV.
+
+---
+
+## Date: 2026-01-10
+**Task:** Sửa và chuẩn hóa toàn bộ script crawl
+
+**User:** Đây là full code hiện tại của tôi, hãy sửa toàn bộ giúp tôi.
+
+**AI (ChatGPT):**  
+Cung cấp phiên bản code hoàn chỉnh, đã sửa tất cả lỗi schema, đồng bộ fieldnames, giữ async + retry + resume, đảm bảo chạy ổn định và phù hợp nộp đồ án.
+
+---
+
+## Date: 2026-01-10
+**Task:** Tránh bị chặn khi crawl
+
+**User:** Có thể bị chặn không, nếu có thêm delay 0.5s.
+
+**AI (ChatGPT):**  
+Giải thích nguy cơ bị chặn (429, 403), hướng dẫn thêm delay hợp lý sau mỗi request chi tiết bằng `await asyncio.sleep(0.5 + random.uniform(0, 0.3))` để tránh pattern bot.
+
+---
+

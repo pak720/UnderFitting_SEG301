@@ -1,6 +1,7 @@
 # ========================
 # CẤU HÌNH
 # ========================
+import random
 import requests
 import csv
 import time
@@ -9,10 +10,11 @@ from bs4 import BeautifulSoup
 from requests.exceptions import RequestException
 
 BASE_DOMAIN = "https://www.tratencongty.com"
-OUTPUT_FILE = "Bizinfo.csv"
-#page 36 dòng thứ 25
-START_PAGE = 37     # page bắt đầu
-END_PAGE = 40       # page kết thúc
+OUTPUT_FILE = "Data_tratencongty.csv"
+#page 107 bỏ vân nam
+
+START_PAGE = 126     # page bắt đầu
+END_PAGE = 130      # page kết thúc
 START_ROW = 0       # resume theo dòng toàn cục
 
 HEADERS = {
@@ -190,4 +192,4 @@ with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
 
             print("    ✅ Saved")
             global_row += 1
-            time.sleep(1)
+            time.sleep(0.5 + random.uniform(0, 0.3))
