@@ -1,5 +1,5 @@
 # ========================
-# CẤU HÌNH
+# IMPORT
 # ========================
 import random
 import requests
@@ -10,18 +10,32 @@ import re
 from bs4 import BeautifulSoup
 from requests.exceptions import RequestException
 
+# ========================
+# CẤU HÌNH
+# ========================
 BASE_DOMAIN = "https://www.tratencongty.com"
-OUTPUT_FILE = "Data_tratencongty_clean.csv"
+OUTPUT_FILE = "Data_tratencongty.csv"
 
-START_PAGE = 157     # page bắt đầu
-END_PAGE = 160      # page kết thúc
-START_ROW = 0       # resume theo dòng toàn cục
+START_PAGE = 330
+END_PAGE = 335
+START_ROW = 0
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0"
 }
 
-# ========================# KHỞI TẠO FILE KẾT QUẢ
+PAGE_SLEEP_MIN = 1.2
+PAGE_SLEEP_MAX = 2.5
+BATCH_SIZE = 50
+
+# ========================
+# KHỞI TẠO SESSION
+# ========================
+session = requests.Session()
+session.headers.update(HEADERS)
+
+# ========================
+# KHỞI TẠO FILE CSV
 # ========================
 if not os.path.exists(OUTPUT_FILE):
     with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
@@ -38,60 +52,65 @@ if not os.path.exists(OUTPUT_FILE):
         ])
 
 # ========================
-# CRAW TRANG TỔNG
+# CLEAN TEXT
+# ========================
+def clean_field(text):
+    if not text:
+        return ""
+    text = text.strip()
+    text = re.sub(r"[()]", "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+# ========================
+# CRAWL TRANG LIST
 # ========================
 def crawl_list_page(page):
     url = f"{BASE_DOMAIN}/?page={page}"
-    print(f"\n[LIST] Crawling page {page}: {url}")
+    print(f"\n[LIST] Page {page}")
 
-    res = requests.get(url, headers=HEADERS, timeout=(5, 10))
-    soup = BeautifulSoup(res.text, "html.parser")
+    try:
+        res = session.get(url, timeout=(5, 10))
+        if res.status_code != 200:
+            print(f"⚠️ HTTP {res.status_code}")
+            return []
 
-    blocks = soup.select("div.search-results")
-    print(f"[INFO] Found {len(blocks)} companies")
+        soup = BeautifulSoup(res.text, "html.parser")
+        blocks = soup.select("div.search-results")
 
-    results = []
+        results = []
+        for b in blocks:
+            a = b.select_one("a[href]")
+            if not a:
+                continue
 
-    for b in blocks:
-        a = b.select_one("a[href]")
-        if not a:
-            continue
+            name = a.get_text(strip=True)
+            link = a["href"]
+            if link.startswith("/"):
+                link = BASE_DOMAIN + link
 
-        name = a.get_text(strip=True)
-        link = a["href"]
+            results.append((name, link))
 
-        if link.startswith("/"):
-            link = BASE_DOMAIN + link
+        print(f"[INFO] Found {len(results)} companies")
+        return results
 
-        results.append((name, link))
-
-    return results
-
+    except RequestException as e:
+        print(f"❌ List error: {e}")
+        return []
 
 # ========================
-# CRAWL TRANG CHI TIẾT
+# CRAWL TRANG DETAIL
 # ========================
 def crawl_detail_page(detail_url, retry=3):
-    print(f"    ↳ Detail: {detail_url}")
-
     for attempt in range(1, retry + 1):
         try:
-            res = requests.get(
-                detail_url,
-                headers=HEADERS,
-                timeout=(5, 15)
-            )
-
-            print(f"      Attempt {attempt} | HTTP {res.status_code}")
-
+            res = session.get(detail_url, timeout=(5, 15))
             if res.status_code != 200:
                 return None
 
             soup = BeautifulSoup(res.text, "html.parser")
-
             container = soup.select_one("div.jumbotron")
             if not container:
-                print("      ⚠️ jumbotron not found")
                 return None
 
             data = {
@@ -104,17 +123,14 @@ def crawl_detail_page(detail_url, retry=3):
                 "status": ""
             }
 
-            # ✅ 1. LẤY TÊN CÔNG TY CHUẨN (KHÔNG DÙNG TEXT LINE)
             name_tag = container.select_one("h4 span[title]")
             if name_tag:
                 data["company_name"] = name_tag.get_text(strip=True)
             else:
-                # fallback
                 h4 = container.find("h4")
                 if h4:
                     data["company_name"] = h4.get_text(strip=True)
 
-            # ✅ 2. PARSE TEXT
             raw_text = container.get_text(separator="\n")
             lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
 
@@ -132,82 +148,70 @@ def crawl_detail_page(detail_url, retry=3):
                 elif line.startswith("Trạng thái"):
                     data["status"] = line.replace("Trạng thái:", "").strip()
 
-            # ✅ KIỂM TRA DỮ LIỆU TRƯỚC KHI TRẢ
             if not data["company_name"]:
-                print("      ⚠️ Missing company name → skip")
                 return None
 
             return data
 
-        except RequestException as e:
-            print(f"      ❌ Attempt {attempt} failed: {e}")
-            time.sleep(2)
+        except RequestException:
+            time.sleep(1)
 
-    print("      ❌ Failed after retries")
     return None
 
-#=========================
-# CLEAN TEXT
-#=========================
-def clean_field(text):
-    if not text:
-        return ""
-
-    text = text.strip()
-    text = re.sub(r"[()]", "", text)
-    text = re.sub(r"\s+", " ", text)
-
-    return text
-
 # ========================
-# CHƯƠNG TRÌNH CHÍNH
+# MAIN
 # ========================
 global_row = 0
+buffer = []
 
 with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
 
     for page in range(START_PAGE, END_PAGE + 1):
         companies = crawl_list_page(page)
-
         if not companies:
-            print("⚠️ No companies → stop")
+            print("⚠️ Empty page → stop")
             break
 
         for name, link in companies:
-
             if global_row < START_ROW:
                 global_row += 1
                 continue
 
-            print(f"[PAGE {page} | ROW {global_row}] {name}")
+            print(f"[ROW {global_row}] {name}")
 
             detail = crawl_detail_page(link)
-
             if not detail:
-                print("    ⚠️ Skip CSV")
                 global_row += 1
                 continue
 
-            # Tạo row ban đầu
             row = [
-                detail.get("company_name") or name,
-                detail.get("mst", ""),
-                detail.get("address", ""),
-                detail.get("legal_rep", ""),
-                detail.get("license_date", ""),
-                detail.get("active_date", ""),
-                detail.get("status", ""),
+                clean_field(detail.get("company_name") or name),
+                clean_field(detail.get("mst")),
+                clean_field(detail.get("address")),
+                clean_field(detail.get("legal_rep")),
+                clean_field(detail.get("license_date")),
+                clean_field(detail.get("active_date")),
+                clean_field(detail.get("status")),
                 clean_field(link)
             ]
 
-            # Lọc bỏ cột trống
-            row = [col for col in row if col.strip() != '']
+            row = [col for col in row if col.strip() != ''] 
             row = [clean_field(col) for col in row]
 
-            # Ghi row đã lọc vào CSV
-            writer.writerow(row)
+            buffer.append(row)
 
-            print("    ✅ Saved")
             global_row += 1
-            time.sleep(0.5 + random.uniform(0, 0.3))
+
+            if len(buffer) >= BATCH_SIZE:
+                writer.writerows(buffer)
+                buffer.clear()
+                print("💾 Batch saved")
+
+        time.sleep(random.uniform(PAGE_SLEEP_MIN, PAGE_SLEEP_MAX))
+
+    if buffer:
+        writer.writerows(buffer)
+        print("💾 Final batch saved")
+
+print("✅ DONE")
