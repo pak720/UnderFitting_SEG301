@@ -216,3 +216,40 @@ Hãy sửa lại dựa trên code của tôi, ghi lại cho tôi đoạn code ho
 Tiến hành chỉnh sửa trực tiếp trên cấu trúc code người dùng cung cấp, giữ nguyên logic crawl dữ liệu và các tham số kiểm soát (start page, end page, resume theo dòng). Áp dụng các tối ưu an toàn đã đề xuất trước đó, bao gồm việc sử dụng session HTTP, điều chỉnh chiến lược delay, và ghi dữ liệu theo batch.
 
 Kết quả là một phiên bản code hoàn chỉnh, có thể chạy ngay, cho tốc độ cải thiện rõ rệt so với phiên bản ban đầu nhưng không làm tăng đáng kể nguy cơ bị chặn. Đồng thời định hướng rõ các bước mở rộng tiếp theo nếu cần crawl dữ liệu quy mô lớn hơn hoặc tăng tốc mạnh hơn trong tương lai.
+
+---
+
+## Date: 2026-01-12
+
+**Task**: Làm sạch và chuẩn hoá dữ liệu CSV crawl được (file clean data)
+
+**User**:
+Data crawl ra [data] có nhiều lỗi nhẹ: lệch cột, dấu " dư, ký tự HTML rác, định dạng ngày không thống nhất (ví dụ 5/6/2025, 23/06/2025 (), dấu chấm cuối tên công ty. Yêu cầu làm sạch nhưng không phá cấu trúc dữ liệu.
+
+**AI (ChatGPT)**:
+Phân tích dữ liệu ở mức raw CSV, xác định nguyên nhân chính là do dữ liệu HTML bẩn và regex xử lý ngày quá chặt. Đề xuất quy trình clean theo hướng ETL chuẩn: đọc từng dòng, giữ schema cố định 7 cột, không dùng pandas, không parse datetime.
+
+Xây dựng các hàm làm sạch độc lập:
+- Clean text thô (loại bỏ "", ký tự rác, chuẩn hoá khoảng trắng).
+- Chuẩn hoá tên công ty, chỉ bỏ dấu chấm ở cuối chuỗi.
+- Chuẩn hoá ngày bằng cách trích ngày hợp lệ đầu tiên trong chuỗi và đưa về DD/MM/YYYY.
+
+Sửa lỗi logic đọc file (file không có header nhưng code giả định có header dẫn đến mất dòng đầu). Kết quả là một script clean độc lập, xử lý được toàn bộ các trường hợp dữ liệu bẩn đã quan sát, cho đầu ra CSV ổn định, Excel mở trực tiếp, sẵn sàng cho các bước NLP/ML.
+
+---
+
+## Date: 2026-01-12
+
+**Task**: Áp dụng logic clean trực tiếp vào code crawl chính để dữ liệu sạch ngay từ đầu
+
+**User**:
+Đây là code crawl của tôi [code]. Tôi muốn data crawl ra có dạng giống như đã clean [data]. Hãy sửa lại
+
+**AI (ChatGPT)**:
+Tiến hành chỉnh sửa trực tiếp trên cấu trúc code người dùng cung cấp, giữ nguyên toàn bộ logic crawl, phân trang, resume theo dòng và chiến lược delay để tránh bị chặn.
+- Áp dụng toàn bộ logic clean đã xây dựng vào pipeline crawl:
+- Loại bỏ cột MST khỏi CSV (do không crawl được vì là ảnh).
+- Chuẩn hoá tên công ty, địa chỉ, người đại diện ngay khi parse HTML.
+- Chuẩn hoá ngày tháng bằng regex linh hoạt, xử lý ký tự rác đi kèm.
+- Không xoá cột rỗng bằng filter để tránh lệch schema.
+- Ghi CSV với utf-8-sig và QUOTE_ALL để đảm bảo an toàn khi mở bằng Excel.
