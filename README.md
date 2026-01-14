@@ -4,6 +4,12 @@ SEG301 - SEARCH ENGINES & INFORMATION RETRIEVAL
 
 # SEG301 Project – Group UnderFitting
 
+| Name | MSSV |
+|----------|----------|
+| Võ Minh Huy | QE190059 |
+| Thân Phúc Hậu | Value B  |
+| Nguyễn Lê Anh Duy | Value C  |
+
 ## 📁 Project Structure
 
 ```text
