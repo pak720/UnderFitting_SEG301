@@ -1,5 +1,27 @@
 # UnderFitting_SEG301
 SEG301 - SEARCH ENGINES & INFORMATION RETRIEVAL
+# 1. Overview & Objectives
+
+Build a Vertical Search Engine (specialized search engine) from scratch.
+
+Core Challenges
+
+Big Data: Process at least 1,000,000 documents
+
+Deep Tech: Full pipeline from crawling to AI-powered search
+
+# Project Scope
+| Category | Description |
+|---------|------------|
+| Project Goal | Build a Vertical Search Engine from scratch |
+| Target Role | Data Engineer & AI Engineer |
+| Data Scale | ≥ 1,000,000 documents |
+
+# Technical Roadmap
+| Phase | Details |
+|------|--------|
+| Phase 1 (Hardcore) | Implement Crawler, Indexer (SPIMI), and Ranker (BM25) from scratch |
+| Phase 2 (Modern) | Integrate AI techniques: Vector Search and Large Language Models (LLM) |
 
 
 # SEG301 Project – Group UnderFitting
