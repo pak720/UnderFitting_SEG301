@@ -2,7 +2,7 @@
 SEG301 - SEARCH ENGINES & INFORMATION RETRIEVAL
 
 
-# SEG301 Project – Group X
+# SEG301 Project – Group UnderFitting
 
 ## 📁 Project Structure
 
