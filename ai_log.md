@@ -253,3 +253,65 @@ Tiến hành chỉnh sửa trực tiếp trên cấu trúc code người dùng c
 - Chuẩn hoá ngày tháng bằng regex linh hoạt, xử lý ký tự rác đi kèm.
 - Không xoá cột rỗng bằng filter để tránh lệch schema.
 - Ghi CSV với utf-8-sig và QUOTE_ALL để đảm bảo an toàn khi mở bằng Excel.
+
+---
+
+## Date: 2026-01-12
+**Task**: Xây dựng logic crawl dữ liệu doanh nghiệp từ website infodoanhnghiep.com dựa trên pipeline async hiện có.
+
+**User**:
+Yêu cầu crawl website infodoanhnghiep.com theo trình tự:
+-Lấy link từ trang danh sách
+-Truy cập trang chi tiết
+-Trích xuất các trường: tên doanh nghiệp, tên giao dịch, mã số thuế, địa chỉ, tình trạng hoạt động, ngày cấp giấy phép, lĩnh vực kinh doanh.
+
+**AI (ChatGPT)**:
+- Phân tích HTML trang danh sách (div.company-item) để xác định selector lấy link chi tiết.
+- Tái sử dụng pipeline aiohttp + asyncio + semaphore + batch write từ hsctvn.com nhằm đảm bảo tốc độ và độ ổn định.
+- Thiết kế parser trang chi tiết dựa trên:
+    - Heading chính (h1) cho tên doanh nghiệp
+    - schema.org (itemprop="taxID", itemprop="address") cho MST và địa chỉ
+    - Bảng thông tin dạng label – value (div.responsive-table-cell) cho các trường còn lại.
+    - Áp dụng clean text và chuẩn hóa ngày tháng ngay trong bước parse để dữ liệu sạch từ đầu.
+
+---
+
+## Date: 2026-01-12
+**Task** : Khắc phục lỗi không trích xuất được trường Tên giao dịch trên trang chi tiết doanh nghiệp.
+
+**User**:
+Phản hồi rằng trường Tên giao dịch bị rỗng sau khi crawl.
+
+**AI (ChatGPT)**:
+- Kiểm tra lại HTML thực tế của infodoanhnghiep.com.
+- Phát hiện website không sử dụng itemprop="alternateName" cho trường Tên giao dịch như giả định ban đầu.
+- Xác định Tên giao dịch được render dưới dạng label – value trong bảng div.responsive-table-cell.
+Giải pháp:
+- Chuyển sang label-based parsing:
+- Duyệt các div.responsive-table-cell
+- Khi gặp label "Tên giao dịch", lấy nội dung của cell kế tiếp làm giá trị.
+- Đồng bộ logic với các trường Ngày cấp giấy phép và Tình trạng hoạt động.
+
+---
+
+## Date: 2026-01-16
+
+**Task**: Phát hiện và loại bỏ dữ liệu trùng lặp trong quá trình crawl nhằm đảm bảo dữ liệu đầu ra sạch và nhất quán
+
+**User**:
+Đây là code crawl của tôi [code]. Sau khi crawl xong, dữ liệu CSV phát sinh nhiều dòng trùng nhau. Tôi muốn áp dụng logic detect duplicate và xóa trực tiếp, giữ lại dữ liệu hợp lệ duy nhất và ghi lại vào file gốc.
+
+**AI (ChatGPT)**:
+Tiến hành xây dựng và áp dụng logic xử lý duplicate dựa trên đặc trưng dữ liệu doanh nghiệp, không làm thay đổi cấu trúc crawl hiện tại.
+
+Xác định khóa trùng lặp dựa trên tổ hợp các cột có tính định danh cao (tên doanh nghiệp, mã số thuế, địa chỉ).
+
+Sử dụng cơ chế drop_duplicates với keep="first" để giữ lại bản ghi hợp lệ đầu tiên.
+
+Không xóa theo từng cột đơn lẻ nhằm tránh mất dữ liệu của các doanh nghiệp khác nhau có tên tương tự.
+
+Thực hiện reset index sau khi loại bỏ duplicate để đảm bảo tính nhất quán của DataFrame.
+
+Ghi đè trực tiếp kết quả đã clean vào file CSV gốc, giữ encoding utf-8-sig và không sinh thêm cột index.
+
+Logic xử lý duplicate được tách biệt, dễ tái sử dụng và không ảnh hưởng đến pipeline crawl async hiện có.
