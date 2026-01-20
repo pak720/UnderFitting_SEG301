@@ -29,7 +29,7 @@ Deep Tech: Full pipeline from crawling to AI-powered search
 | Name | MSSV |
 |----------|----------|
 | Võ Minh Huy | QE190059 |
-| Thân Phúc Hậu | Value B  |
+| Thân Phúc Hậu | QE190002  |
 | Nguyễn Lê Anh Duy | QE190134  |
 
 ## 📁 Project Structure
