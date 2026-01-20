@@ -30,7 +30,7 @@ Deep Tech: Full pipeline from crawling to AI-powered search
 |----------|----------|
 | Võ Minh Huy | QE190059 |
 | Thân Phúc Hậu | Value B  |
-| Nguyễn Lê Anh Duy | Value C  |
+| Nguyễn Lê Anh Duy | QE190134  |
 
 ## 📁 Project Structure
 
