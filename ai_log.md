@@ -429,8 +429,7 @@ Yêu cầu loại bỏ chuỗi “(Xem danh sách)” trong cột Ngành nghề 
 **User:**
 Muốn có đoạn code mở file JSON và kiểm tra số phần tử bên trong.
 
-**AI (ChatGPT):**
-Cung cấp đoạn code Python ngắn gọn dùng json.load() và len() để đếm phần tử.
+
 ###Thành viên 3: Duy
 ================================================================================
 CONVERSATION LOG - Web Scraping Script Development
