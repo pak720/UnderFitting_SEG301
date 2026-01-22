@@ -431,4 +431,359 @@ Muốn có đoạn code mở file JSON và kiểm tra số phần tử bên tron
 
 **AI (ChatGPT):**
 Cung cấp đoạn code Python ngắn gọn dùng json.load() và len() để đếm phần tử.
+###Thành viên 3: Duy
+================================================================================
+CONVERSATION LOG - Web Scraping Script Development
+================================================================================
+Project: Crawl_data_SEG301.py
+Target Website: thongtincongty.vn
+Date Range: 2026-01-09 to 2026-01-11
+================================================================================
+
+[2026-01-09 - Initial Issue]
+User Request: "toi chon lay tu dong thi chi co duoc 20 cong ty, bay giof toi muon lay tu dong cac cong ty khac co duoc khong"
+Translation: Auto-fetch only gets 20 companies, wants to fetch more automatically
+
+Problem Identified:
+- Script limited to ~20 companies per run
+- Homepage pagination not working properly
+- Need automatic fetching for larger datasets
+
+[2026-01-09 - First Error Encountered]
+Error Message: "404 Client Error: Not Found for url: https://thongtincongty.vn/page/2"
+Context: Auto-fetch from homepage option
+
+Root Cause Analysis:
+- Website does not support pagination beyond page 1
+- URLs like /page/2/ return 404 Not Found
+- Homepage scraping fails when trying to access page 2+
+
+Solution Implemented:
+- Added status_code check before raise_for_status()
+- Stop pagination early when 404 detected
+- Fallback to keyword search to supplement links
+
+Code Changes in get_company_links_from_homepage():
+  if resp.status_code == 404 and page > 1:
+      print(f"  Trang {url} tra ve 404, dung phan trang trang chu.")
+      break
+
+[2026-01-09 - Second Error Encountered]
+Error Message: "404 Client Error: Not Found for url: https://thongtincongty.vn/page/2?s=a"
+Context: Search function trying to paginate results
+
+Root Cause Analysis:
+- Search pagination also returns 404 for page 2+
+- Same issue as homepage pagination
+- Causes crash when iterating through keyword searches
+
+Solution Implemented:
+- Applied same 404 detection logic to search_companies()
+- Stop pagination gracefully
+- Keep results from page 1
+
+Code Changes in search_companies():
+  if resp.status_code == 404 and page > 1:
+      print(f"  Trang {search_url} tra ve 404, dung phan trang tim kiem.")
+      break
+
+[2026-01-09 - Data Persistence Issue]
+User Request: "sao du lieu khong duoc luu lai, ma moi lan crawl thi ra du lieu moi ma khong luu data cu"
+Translation: Data not being saved, new crawl overwrites old data
+
+Problem Identified:
+- Each new crawl session overwrites previous CSV file
+- is_first=True always opens file in write mode 'w'
+- Previous company data lost on each run
+
+Root Cause:
+- In save_data(): mode = 'w' if is_first else 'a'
+- First company of new session always uses write mode
+- No check if file already exists with previous data
+
+Solution Implemented:
+- Check if file exists before deciding mode
+- Only use 'w' mode if file does not exist
+- Use 'a' (append) mode when file already has data
+- Skip header when appending
+
+Code Changes in save_data():
+  file_exists = filepath.exists()
+  mode = 'w' if (is_first and not file_exists) else 'a'
+  write_header = (is_first and not file_exists) or not file_exists
+
+[2026-01-11 - Division by Zero Error]
+Error Message: "ZeroDivisionError: integer division or modulo by zero"
+Stack Trace: extra = search_companies(kw, (max_companies - len(urls)) // (5 - len(keywords)), max_pages=5)
+
+Root Cause Analysis:
+- keywords list has 5 elements
+- Loop iterates through all keywords
+- Expression: (5 - len(keywords)) evaluates to (5 - 5) = 0
+- Division by zero when calculating 'needed' amount
+
+Solution Implemented:
+- Use enumerate() to track keyword index
+- Calculate remaining keywords: len(keywords) - idx
+- Use max(1, ...) to ensure divisor is at least 1
+- Prevents division by zero in all cases
+
+Code Changes in Option 5:
+  for idx, kw in enumerate(keywords):
+      needed = (max_companies - len(urls)) // max(1, len(keywords) - idx)
+      extra = search_companies(kw, needed, max_pages=5)
+
+[2026-01-11 - Scalability Enhancement]
+User Request: "moi lan chi toi da 20 cong ty, co cach nao tang nang xuat crawl len nhieu cong ty hon khong"
+Translation: Maximum 20 companies per run, need to increase crawling capacity
+
+Problem Analysis:
+- Homepage only provides limited links
+- Single keyword search yields few results
+- Pagination broken (404 errors)
+- Need multiple strategies to gather more links
+
+Solution Strategy 1 - Expanded Keyword Pool:
+- Increased from 10 to 25 keywords
+- Added Vietnamese terms: "cong ty", "doanh nghiep", "tap doan"
+- Added business types: "cua hang", "chi nhanh", "van phong"
+- Added facility types: "nha hang", "khach san", "sieu thi", "buu cuc"
+
+Updated keyword_pool in get_company_links_from_homepage():
+  keyword_pool = [
+      "a", "e", "i", "o", "u", "1", "2", "3", "c", "t",
+      "cong ty", "doanh nghiep", "tap doan", "cua hang", "chi nhanh",
+      "van phong", "nha hang", "quan", "buu cuc", "tram",
+      "sieu thi", "khach san", "cong xuong", "kho", "trung tam"
+  ]
+
+Solution Strategy 2 - Geographic Search:
+- Created new function: search_companies_by_location(province, max_results)
+- Search by province/city names
+- Target 10 major Vietnamese locations
+- Diversifies company sources
+
+New function added:
+  def search_companies_by_location(province, max_results=10):
+      search_url = f"https://thongtincongty.vn/?s={province}"
+      # Parse links from search results
+      # Filter for /ma-so-thue/ paths
+      return links
+
+Province list: "Ha Noi", "TP.HCM", "Da Nang", "Hai Phong", "Can Tho", "Binh Duong", "Dong Nai", "Long An", "Quang Ninh", "Bac Ninh"
+
+Solution Strategy 3 - New Menu Options:
+Updated main menu with 5 options:
+  1. Use predefined URL list in code
+  2. Manual URL input
+  3. Auto-fetch from homepage + multi-keyword search (default: 100 companies)
+  4. Search by specific keyword (default: 100 companies)
+  5. Combined search: multi-province + multi-keyword (default: 150 companies)
+
+Option 3 Changes:
+- Default increased from 50 to 100 companies
+- Uses expanded 25-keyword pool
+- Falls back to keyword search when homepage insufficient
+
+Option 4 Changes:
+- Default increased from 50 to 100 companies
+- Allows user-specified keyword
+- Attempts pagination (stops at 404)
+
+Option 5 Implementation (NEW - Highest Capacity):
+- Default 150 companies
+- Searches 10 provinces first
+- Supplements with 5 business-type keywords
+- Distributes quota across sources
+- Best option for large-scale crawling
+
+[2026-01-11 - Feature Summary]
+Completed Features:
+
+1. Error Handling:
+   - 404 detection and graceful pagination stop
+   - No crashes on pagination failures
+   - Preserves partial results
+
+2. Data Management:
+   - Append mode preserves previous data
+   - Deduplication by tax code (ma_so_thue)
+   - Retry mechanism for file lock (PermissionError)
+   - Backup file creation when main file locked
+   - CSV written to E:/crawled_data/
+
+3. Link Collection Strategies:
+   - Homepage scraping (page 1 only)
+   - Multi-keyword search (25 keywords)
+   - Geographic search (10 provinces)
+   - Combined multi-source approach
+
+4. Performance Optimizations:
+   - 1 second delay between company crawls
+   - 0.5 second delay between page requests
+   - Browser-like headers to avoid blocking
+   - 30 second timeout per request
+
+5. User Interface:
+   - 5 menu options for different use cases
+   - Configurable company count per option
+   - Progress tracking: [current/total]
+   - Success/failure statistics
+   - Final summary report
+
+================================================================================
+CAPACITY COMPARISON
+================================================================================
+
+Before Optimization:
+- Maximum: ~20 companies per session
+- Single source (homepage)
+- Crashes on pagination errors
+- Overwrites previous data
+
+After Optimization:
+- Option 3: Up to 100 companies (homepage + 25 keywords)
+- Option 4: Up to 100 companies (user keyword)
+- Option 5: Up to 150+ companies (10 provinces + 5 keywords)
+- No crashes, graceful error handling
+- Preserves all previous data
+- Auto-deduplication by tax code
+
+Performance Increase: 7.5x (from 20 to 150+ companies)
+
+================================================================================
+KEY FUNCTIONS
+================================================================================
+
+get_company_links_from_homepage(max_links, max_pages):
+  Purpose: Fetch company links from homepage
+  Features:
+    - Pagination with 404 detection
+    - Fallback to keyword search
+    - Deduplication of links
+  Returns: List of company URLs
+
+search_companies(keyword, max_results, max_pages):
+  Purpose: Search companies by keyword
+  Features:
+    - Pagination with 404 handling
+    - Filters /ma-so-thue/ and /cong-ty/ paths
+    - Configurable result limit
+  Returns: List of company URLs
+
+search_companies_by_location(province, max_results):
+  Purpose: Search companies by province/city
+  Features:
+    - Single-page search
+    - Geographic diversity
+    - Quick link collection
+  Returns: List of company URLs
+
+parse_company_info(html, url):
+  Purpose: Extract company data from HTML
+  Fields Extracted:
+    - Ten don vi / Ten doanh nghiep
+    - Ma so thue
+    - Ma so thue cu
+    - Dia chi
+    - Trang thai
+    - Co quan thue
+    - Phuong phap tinh thue
+    - Nganh nghe
+    - Chuong khoan
+  Returns: Dictionary with company info
+
+save_data(data, filename, is_first):
+  Purpose: Save company data to CSV
+  Features:
+    - Append mode (preserves old data)
+    - Deduplication by tax code
+    - Retry on PermissionError (3 attempts)
+    - Backup file on persistent lock
+    - UTF-8-sig encoding for Excel compatibility
+  Output: E:/crawled_data/all_companies_data.csv
+
+crawl_requests(url):
+  Purpose: Fetch and parse single company page
+  Method: HTTP requests (no browser needed)
+  Headers: Mimics Chrome browser
+  Timeout: 30 seconds
+  Returns: Company data dictionary
+
+================================================================================
+ERROR RESOLUTION TIMELINE
+================================================================================
+
+Issue 1: Homepage 404 Error
+  Time: 2026-01-09
+  Status: RESOLVED
+  Method: Status code check + early break
+
+Issue 2: Search 404 Error  
+  Time: 2026-01-09
+  Status: RESOLVED
+  Method: Applied same fix as Issue 1
+
+Issue 3: Data Overwrite
+  Time: 2026-01-09
+  Status: RESOLVED
+  Method: File existence check + append mode
+
+Issue 4: Division by Zero
+  Time: 2026-01-11
+  Status: RESOLVED
+  Method: enumerate() + max(1, ...) guard
+
+Issue 5: Low Company Limit
+  Time: 2026-01-11
+  Status: RESOLVED
+  Method: Multi-strategy link collection
+
+================================================================================
+USAGE RECOMMENDATIONS
+================================================================================
+
+For Small Datasets (< 50 companies):
+  Use Option 3 or 4
+  Set limit to 50
+  Single keyword search sufficient
+
+For Medium Datasets (50-100 companies):
+  Use Option 3
+  Set limit to 100
+  Leverages 25-keyword pool
+
+For Large Datasets (100+ companies):
+  Use Option 5 (RECOMMENDED)
+  Set limit to 150 or higher
+  Combines geographic + keyword search
+  Best performance and diversity
+
+General Tips:
+  - Close CSV file before running script
+  - Use Option 5 for maximum efficiency
+  - Check E:/crawled_data/ for output
+  - Script auto-creates directory if missing
+  - Duplicates automatically filtered by tax code
+  - Can run multiple times to accumulate data
+
+================================================================================
+FILE STRUCTURE
+================================================================================
+
+Output Directory: E:/crawled_data/
+Main Output File: all_companies_data.csv
+Backup Files: all_companies_data_backup_[timestamp].csv
+
+CSV Format:
+  - Encoding: UTF-8-sig (Excel compatible)
+  - Delimiter: Comma
+  - Headers: Ten cong ty, URL, Thoi gian crawl, ma_so_thue, dia_chi, etc.
+  - One row per company
+  - Duplicates filtered by ma_so_thue field
+
+================================================================================
+
+
+
 ## END OF AI INTERACTION LOG
