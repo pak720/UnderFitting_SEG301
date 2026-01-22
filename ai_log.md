@@ -153,8 +153,6 @@
 
 ---
 
-# AI INTERACTION LOG
-
 ### Date: 2026-01-10
 **Task:** Tìm nguồn dữ liệu để crawl thông tin doanh nghiệp (Thông tin pháp lý, Thuế, Review)
 
@@ -359,9 +357,9 @@ Giải pháp:
 
 ### Date: 2026-01-16
 
-**Task**: Phát hiện và loại bỏ dữ liệu trùng lặp trong quá trình crawl nhằm đảm bảo dữ liệu đầu ra sạch và nhất quán
+**Task:** Phát hiện và loại bỏ dữ liệu trùng lặp trong quá trình crawl nhằm đảm bảo dữ liệu đầu ra sạch và nhất quán
 
-**User**:
+**User:**
 Đây là code crawl của tôi [code]. Sau khi crawl xong, dữ liệu CSV phát sinh nhiều dòng trùng nhau. Tôi muốn áp dụng logic detect duplicate và xóa trực tiếp, giữ lại dữ liệu hợp lệ duy nhất và ghi lại vào file gốc.
 
 **AI (ChatGPT)**:
@@ -379,4 +377,58 @@ Ghi đè trực tiếp kết quả đã clean vào file CSV gốc, giữ encodin
 
 Logic xử lý duplicate được tách biệt, dễ tái sử dụng và không ảnh hưởng đến pipeline crawl async hiện có.
 
+
+### Date: 2026-01-22
+
+**Task:** Hợp nhất dữ liệu doanh nghiệp từ nhiều nguồn CSV
+
+**User:**
+Tôi muốn ghép các dataframe thành một DF hoàn chỉnh gồm các trường pháp lý doanh nghiệp (tên, MST, địa chỉ, tình trạng hoạt động, ngành nghề, …), loại bỏ các cột không cần thiết như URL, thời gian crawl. Yêu cầu giữ lại cả các dòng thiếu thông tin (outer merge), cột thiếu để trống.
+
+**AI (ChatGPT):**
+Xác nhận yêu cầu merge theo schema chuẩn, sử dụng outer join, ưu tiên dữ liệu nguồn chính, dữ liệu thiếu để NaN.
+
+---
+### Date: 2026-01-22
+
+**Task:** Bổ sung doanh nghiệp từ nguồn dữ liệu thứ hai
+
+**User:**
+Muốn thêm toàn bộ công ty từ df2 vào kết quả cuối. Nếu df1 không có thì vẫn giữ, các cột không tồn tại trong df1 để trống.
+
+**AI (ChatGPT):**
+Đề xuất merge df1 và df2 bằng khóa chung (MST), dùng combine_first để ưu tiên nguồn chính nhưng không làm mất dữ liệu nguồn phụ.
+
+---
+### Date: 2026-01-22
+
+**Task:** Debug lỗi merge DataFrame
+
+**User:**
+Gặp lỗi KeyError: 'mst_clean' khi chuẩn hóa cột “Mã số thuế” sau khi merge hai dataframe.
+
+**AI (ChatGPT):**
+Chỉ ra lỗi do tham chiếu cột không tồn tại trong merged, hướng dẫn sử dụng đúng tên cột hậu merge (_df1, _df2) hoặc tái sử dụng mst_key.
+
+---
+### Date: 2026-01-22
+
+**Task:** Làm sạch dữ liệu ngành nghề kinh doanh
+
+**User:**
+Yêu cầu loại bỏ chuỗi “(Xem danh sách)” trong cột Ngành nghề kinh doanh.
+
+**AI (ChatGPT):**
+Đề xuất xử lý bằng str.replace() hoặc regex để làm sạch text mà không ảnh hưởng dữ liệu còn lại.
+
+---
+### Date: 2026-01-22
+
+**Task:** Kiểm tra số phần tử trong file JSON
+
+**User:**
+Muốn có đoạn code mở file JSON và kiểm tra số phần tử bên trong.
+
+**AI (ChatGPT):**
+Cung cấp đoạn code Python ngắn gọn dùng json.load() và len() để đếm phần tử.
 ## END OF AI INTERACTION LOG
