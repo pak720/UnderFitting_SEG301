@@ -430,7 +430,7 @@ Yêu cầu loại bỏ chuỗi “(Xem danh sách)” trong cột Ngành nghề 
 Muốn có đoạn code mở file JSON và kiểm tra số phần tử bên trong.
 
 
-###Thành viên 3: Duy
+Thành viên 3: Duy
 ================================================================================
 CONVERSATION LOG - Web Scraping Script Development
 ================================================================================
