@@ -589,6 +589,162 @@ Yêu cầu loại bỏ chuỗi “(Xem danh sách)” trong cột Ngành nghề 
 **User:**
 Muốn có đoạn code mở file JSON và kiểm tra số phần tử bên trong.
 
+**AI (ChatGPT):**
+Cung cấp đoạn code Python ngắn gọn dùng json.load() và len() để đếm phần tử.
+
+---
+### Date: 2026-01-23
+
+**Task:** Gộp nhiều file JSON có cùng cấu trúc
+
+**User:**
+Viết cho tôi code để gom 3 file json cấu trúc giống nhau thành 1
+
+**AI (ChatGPT):**
+Giải thích cách đọc từng file JSON/JSONL, duyệt qua các object, gom lại vào một danh sách hoặc ghi nối tiếp ra file output. Cung cấp code Python sử dụng json.load() hoặc đọc theo dòng với JSONL để đảm bảo xử lý được file lớn.
+
+---
+
+### Date: 2026-01-23
+
+**Task:** Ghép thông tin công ty với file review khi tên không khớp
+
+**User:**  
+tôi có 1 file json chứa thôg tin công ty giống thế này [`filedata`] và 1 file json chứa review như thế này [`filereview`]. Có 1 vài cty trong file thông tin có review, nhưng tên cty trong review và thông tin không giống nhau, có model nào có thể nhận diện tên và ghép lại không.
+
+**AI (ChatGPT):**  
+Phân tích đây là bài toán entity matching. Đề xuất sử dụng mô hình embedding (SentenceTransformer/SBERT) để so khớp tên công ty theo ngữ nghĩa, kết hợp với fuzzy matching để xử lý các khác biệt nhỏ về chuỗi ký tự.
+
+---
+
+### Date: 2026-01-23
+
+**Task:** Viết code ghép và in ra các object đã ghép để kiểm tra
+
+**User:**  
+Hãy viết giúp tôi code, sau khi ghép thì in ra trước các object đã ghép để ktra, phần review có thể làm 1 object con ngang hàng vs tên cty, địa chỉ,... còn các phần review chi tiết sẽ nằm bên trong
+
+**AI (ChatGPT):**  
+Cung cấp pipeline Python gồm: chuẩn hóa tên, encode embedding cho tên công ty/review, tính similarity, ghép review vào object công ty phù hợp và in ra các bản ghi đã ghép để người dùng kiểm tra thủ công.
+
+---
+
+### Date: 2026-01-23
+
+**Task:** Lỗi môi trường với transformers và tf_keras
+
+**User:**  
+Gặp lỗi `No module named 'tf_keras'` khi chạy code.
+
+**AI (ChatGPT):**  
+Giải thích nguyên nhân do transformers chưa tương thích với Keras 3. Hướng dẫn cài thêm `tf-keras` hoặc tạo môi trường conda mới với phiên bản thư viện phù hợp.
+
+---
+
+## Date: 2026-01-23
+
+**Task:** Lỗi Torch không có CUDA
+
+**User:**  
+Gặp lỗi `Torch not compiled with CUDA enabled`.
+
+**AI (ChatGPT):**  
+Giải thích PyTorch đang là bản CPU-only. Hướng dẫn cài PyTorch có CUDA tương thích với GPU và driver, kiểm tra bằng `torch.cuda.is_available()`.
+
+---
+
+### Date: 2026-01-23
+
+**Task:** Chạy trên GPU RTX 3050 và ước lượng thời gian
+
+**User:**  
+Máy có RTX 3050, muốn chạy ghép trên GPU và file 1 1m6 object và file 2 tầm vài nghìn thì chạy tầm bao lâu.
+
+**AI (ChatGPT):**  
+Phân tích pipeline: embedding chỉ cần chạy cho file review (nhỏ), file công ty xử lý theo batch. Ước lượng thời gian từ vài phút đến khoảng 10–15 phút tùy batch size và tốc độ IO.
+
+---
+
+### Date: 2026-01-24
+
+**Task:** Lỗi KeyError khi truy cập `company_name`
+**User:**  
+Gặp lỗi `KeyError: 'company_name'` khi chạy code ghép.
+
+**AI (ChatGPT):**  
+Chỉ ra sự khác biệt schema giữa các file (file công ty dùng key tiếng Việt, file review dùng `company_name`). Hướng dẫn sửa code để dùng đúng key tương ứng.
+
+---
+
+### Date: 2026-01-24
+
+**Task:** Chuẩn hóa và lọc dữ liệu review
+**User:**  
+[`1 dòng data sau khi ghép`] Đây là một line đã được ghép, trong này có 1 số mục k cần thiết trong reviews như company_name, company_url, semantic_score, fuzzy_score, hãy viết giúp tôi code lọc ra. trong file này có 1 số dòng k có review
+
+**AI (ChatGPT):**  
+Viết code lọc review, chỉ giữ các field cần thiết (`rating`, `role`, `title`, `meta`, `pros`, `cons`) và chuẩn hóa review thành object con trong mảng `reviews`.
+
+---
+
+### Date: 2026-01-24
+
+**Task:** Chuẩn hóa file review có cấu trúc khác
+
+**User:**  
+[`1 dòng data sau khi ghép khác`] Đây là file khác cũng cỏ review, tuy nhiên trình bày dưới dạng khác. hãy viết code xóa bỏ phần thừa, rồi chuyển review thành object con giống định dạng của tôi lúc nãy
+
+**AI (ChatGPT):**  
+Phân tích cấu trúc dữ liệu, viết code tách các field review khỏi object chính và đóng gói lại thành mảng `reviews` để đồng nhất schema.
+
+---
+
+### Date: 2026-01-24
+
+**Task:** Gộp hai file output và không làm mất dòng
+**User:**  
+Sau đó hãy viết cho tôi code gộp 2 file output này lại, cái nào có nhiều review thì làm thành nhiều review trong 1 object review, cái nào k có thì giữ nguyên, revew sẽ theo thứ tự "rating", "role", "title", "meta", "pros", "cons"
+
+**AI (ChatGPT):**  
+Cung cấp code merge theo khóa “Mã số thuế”, đảm bảo mỗi dòng đầu vào đều xuất hiện trong output và review được gộp đúng cách.
+
+---
+
+### Date: 2026-01-24
+
+**Task:** Đếm số dòng có review
+
+**User:**  
+Cho tôi code in ra xem có bao nhiêu dòng có reviews
+
+**AI (ChatGPT):**  
+Viết code đọc JSONL từng dòng, kiểm tra trường `reviews` và đếm số object có review.
+
+---
+
+### Date: 2026-01-23
+
+**Task:** Tính thống kê NLP cơ bản
+
+**User:**  
+Cho tôi code tính Độ dài trung bình document Số lượng từ vựng (Vocabulary size)
+
+**AI (ChatGPT):**  
+Cung cấp code tokenize toàn bộ text trong mỗi JSON object, tính trung bình số từ trên mỗi document và số lượng từ vựng duy nhất của toàn bộ dataset.
+
+---
+
+### Date: 2026-01-24
+
+**Task:** Debug JSONDecodeError
+
+**User:**  
+Gặp lỗi `JSONDecodeError`, [`1 dòng data lỗi`] Data này lỗi chỗ nào, sửa như thế nào
+
+**AI (ChatGPT):**  
+Phân tích ví dụ cụ thể, chỉ ra lỗi do dấu `"` không được escape trong chuỗi. Hướng dẫn sửa bằng `\"` và đề xuất script tự động làm sạch JSONL cho dataset lớn.
+
+---
 
 Thành viên 3: Duy
 ================================================================================
