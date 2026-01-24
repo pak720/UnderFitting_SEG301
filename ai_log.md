@@ -61,20 +61,17 @@
 **AI (Gemini):** Sử dụng chính xác class .job-company trích xuất từ hình ảnh Inspect Element của người dùng cung cấp để lấy tên công ty chính xác tuyệt đối. Đồng thời, cập nhật mã nguồn để trích xuất thuộc tính href, nối với BASE_URL nhằm cung cấp đường dẫn chi tiết cho từng công việc trong file CSV.
 
 ---
+
 # AI Log – JSONL & JSON Fuzzy Matching Debug
-
-## Date
-2026-01-23
-
-## Task
-So sánh và hợp nhất (merge) dữ liệu doanh nghiệp giữa:
+# Date 2026-01-23
+**Task:**So sánh và hợp nhất (merge) dữ liệu doanh nghiệp giữa:
 - **File JSONL** (nguồn dữ liệu đăng ký doanh nghiệp – có trường `Tên doanh nghiệp`)
 - **File JSON** (nguồn đánh giá doanh nghiệp – có trường `company_name`)
 
 Mục tiêu là fuzzy match tên doanh nghiệp giữa hai nguồn và **chỉ merge khi thực sự cùng một doanh nghiệp**, đồng thời **phát hiện và sửa lỗi match sai nghiêm trọng (false positive)**.
 
 
-## Background
+**Background**
 
 Người dùng đang xử lý tập dữ liệu doanh nghiệp lớn, trong đó:
 - File JSONL chứa thông tin pháp lý (MST, địa chỉ, tình trạng hoạt động, …)
@@ -86,25 +83,23 @@ Yêu cầu:
 - Đảm bảo **không merge nhầm** giữa các doanh nghiệp không liên quan
 
 
-## Conversation Detail
+**Conversation Detail**
 
-### User
+**User:**
 Cung cấp một object JSON mẫu và hỏi:
 
 > “Đây là cú pháp của một dòng data trong file .json của tôi, bạn có thể list các tên object ra không?”
 
----
 
-### ChatGPT
+**ChatGPT**
 Liệt kê đầy đủ các key (object name) trong JSON.  
 Đề xuất hỗ trợ thêm:
 - Trích key bằng Python
 - Xử lý nhiều dòng JSON
 - Xuất dữ liệu sang CSV hoặc README.md
 
----
 
-### User
+ **User**
 Cung cấp hai object thuộc hai file khác nhau:
 
 - File 1: `Tên doanh nghiệp`
@@ -114,9 +109,9 @@ Yêu cầu:
 
 > So sánh hai object này, nếu cụm từ giống hoặc gần giống thì ghép các object còn lại của file 2 vào file 1 cho từng dòng tương ứng. Tôi muốn một đoạn code Python hoàn chỉnh.
 
----
 
-### ChatGPT
+
+**ChatGPT**
 Xác định đây là bài toán **fuzzy string matching + data merge**.  
 Đề xuất giải pháp:
 - Chuẩn hóa chuỗi (bỏ dấu tiếng Việt, ký tự đặc biệt)
@@ -126,16 +121,15 @@ Xác định đây là bài toán **fuzzy string matching + data merge**.
 
 Cung cấp script Python hoàn chỉnh cho case **JSON + JSON**.
 
----
 
-### User
+
+**User**
 Hỏi tiếp:
 
 > “Thế tôi có file 1 là jsonl còn file 2 là json thì như thế nào?”
 
----
 
-### ChatGPT
+**ChatGPT**
 Giải thích sự khác nhau giữa JSON và JSONL:
 - JSON: load toàn bộ 1 lần
 - JSONL: đọc từng dòng
@@ -145,15 +139,87 @@ Cập nhật script để:
 - Giữ nguyên logic fuzzy matching
 - Output vẫn là JSONL
 
----
 
-### User
+**User**
 Phát hiện lỗi nghiêm trọng và gửi ví dụ thực tế:
 
 ```json
 "Tên doanh nghiệp": "Công viên thành công"
 "company_name": "Công Ty TNHH Một Thành Viên Thanh Hương Technology"
 "_match_score": 100.0
+```
+**Dù đã đặt:**
+```
+MATCH_THRESHOLD = 98
+```
+
+Hai doanh nghiệp không liên quan vẫn bị merge.
+
+**Yêu cầu:**
+“Bạn có thể sửa lại code một cách hoàn chỉnh được không?”
+
+**ChatGPT:** 
+
+Phân tích nguyên nhân gốc rễ:
+
+Lỗi không nằm ở threshold
+
+Lỗi nằm ở việc sử dụng fuzz.token_set_ratio
+
+Giải thích:
+
+token_set_ratio bỏ thứ tự token
+
+Bỏ token dư
+
+Rất dễ sinh false positive với tên doanh nghiệp
+
+Ví dụ:
+```
+"thanh cong" ≈ "thanh huong"
+```
+
+có thể bị coi là tương tự cao → dẫn tới match 100% sai.
+
+Technical Fix
+Quyết định kỹ thuật
+
+Áp dụng 3 lớp kiểm soát bắt buộc:
+
+Substring constraint
+Một trong hai tên phải chứa tên còn lại sau khi chuẩn hóa
+→ Loại bỏ hoàn toàn các match không liên quan
+
+Thay token_set_ratio bằng fuzz.ratio
+→ So sánh nghiêm ngặt theo thứ tự ký tự
+
+Giữ MATCH_THRESHOLD = 98
+→ Chỉ merge khi gần như trùng khớp tuyệt đối
+
+Kết quả
+
+Case:
+```
+Công viên thành công
+vs
+Thanh Hương Technology
+```
+
+❌ Không substring
+❌ Không merge
+❌ Không còn _match_score = 100
+
+Các doanh nghiệp thực sự trùng tên vẫn merge chính xác
+
+**Final Outcome:**
+
+Script Python được viết lại hoàn chỉnh
+
+Đã loại bỏ false positive
+
+Phù hợp dữ liệu doanh nghiệp thực tế
+
+An toàn cho pipeline xử lý dữ liệu lớn
 
 ---
 # Thành viên 2: Hậu
