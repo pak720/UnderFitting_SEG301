@@ -13,57 +13,6 @@ from typing import Dict
 BASE_URL = "https://infodoanhnghiep.com/TP-Ho-Chi-Minh"
 OUTPUT_FILE = "Data_infodoanhnghiep_clean.csv"
 
-# #Hanoi 30000 
-# HCM từ 20000
-# #Binh Dinh Xong
-# # Phu Yen Xong 
-# Khanh Hoa Xong
-# Vinh Phuc Xong
-# Vinh Long Xong
-# Tuyen Quang Xong
-#Tra Vinh Xong
-# Tien Giang Xong
-# Thua Thien Hue Xong
-# Thanh Hoa Xong
-# Thai Nguyen Xong
-# Thai Bình Xong
-# Tay Ninh Xong
-# Sơn La Xong
-# Soc Trang Xong
-# Quang Tri Xong
-# Quang Ninh Xong
-# Quang Ngai Xong
-# Quang Nam Xong
-# QUang Binh Xong
-# Phu Tho Xong
-# Ninh Thuan Xong
-# Ninh Binh Xong
-# Nghệ An Xong
-# Nam Dinh Xong
-# Long An Xong
-# Lao Cai Xong
-# Lang Son Xong
-# Lam Dong Xong
-# Lai Châu Xong
-# Kon Tum Xong 
-# Kien Gian Xong
-# Hung Yen Xong
-# Hoa Binh Xong
-# Hau Giang Xong
-# Hai Duong Xong
-# Ha Tinh Xong
-# Ha Giang Xong
-# Ha Nam Xong 
-# Gia Lai Xong
-# Dong Thap Xong
-# Dong Nai Xong
-# Dien Bien Xong
-# Dak Nong Xong
-# Dak Lak Xong
-# Binh Phuoc Xong
-
-
-# Đi từ Bắc Cạn 
 
 START_PAGE = 20000
 END_PAGE = 27658
@@ -241,3 +190,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
