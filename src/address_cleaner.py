@@ -79,8 +79,13 @@ class AddressCleaner:
         address = address.strip(',').strip()
         
         # Bước 2: Xử lý số nhà liên tiếp "29 31 Đinh Bộ Lĩnh" -> "29-31 Đinh Bộ Lĩnh"
-        # Pattern: hai số liên tiếp (không có khoảng lớn) được phân tách bằng khoảng trắng
-        address = re.sub(r'\b(\d+)\s+(\d+)\s+([A-Z])', r'\1-\2 \3', address)
+        # Chỉ gộp nếu: hai số nhỏ liên tiếp (1-999) + theo sau là tên đường/phố (bắt đầu bằng chữ)
+        # Tránh nhầm với năm, số tháng, v.v.
+        address = re.sub(
+            r'\b(\d{1,3})\s+(\d{1,3})\s+(?=[A-Za-zĐđ])',
+            r'\1-\2 ',
+            address
+        )
 
         # Bước 2.1: Xử lý số nhà có ký tự (80 A -> 80A)
         # Chỉ xử lý nếu theo sau là dấu cách + chữ cái + dấu cách + từ tiếp theo
@@ -271,8 +276,8 @@ class AddressCleaner:
 
 def main():
     """Hàm chính"""
-    input_file = Path("E:\\final_merged.jsonl")
-    output_file = Path("E:\\final_merged_1.jsonl")
+    input_file = Path("e:\\UnderFitting_SEG301\\data_sample\\sample.jsonl")
+    output_file = Path("e:\\UnderFitting_SEG301\\data_sample\\sample_cleaned.jsonl")
     
     # Tạo instance
     cleaner = AddressCleaner()
