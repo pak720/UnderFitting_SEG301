@@ -78,20 +78,62 @@ class AddressCleaner:
         
         address = address.strip(',').strip()
         
-        # Bước 2: Xử lý số nhà liên tiếp "29 31 Đinh Bộ Lĩnh" -> "29-31 Đinh Bộ Lĩnh"
-        # Chỉ gộp nếu: hai số nhỏ liên tiếp (1-999) + theo sau là tên đường/phố (bắt đầu bằng chữ)
-        # Tránh nhầm với năm, số tháng, v.v.
-        address = re.sub(
-            r'\b(\d{1,3})\s+(\d{1,3})\s+(?=[A-Za-zĐđ])',
-            r'\1-\2 ',
-            address
-        )
-
-        # Bước 2.1: Xử lý số nhà có ký tự (80 A -> 80A)
-        # Chỉ xử lý nếu theo sau là dấu cách + chữ cái + dấu cách + từ tiếp theo
-        if re.search(r'(\d+)\s+([A-Z])(\s+)', address):
-            address = re.sub(r'(\d+)\s+([A-Z])(\s+)', r'\1\2\3', address)
-            self.stats['fixed_house_char'] += 1
+        # Bước 2: Xử lý toàn diện số nhà - áp dụng cho TẤT CẢ các format
+        # =============================================================
+        
+        # Bước 2.0: Chuẩn hóa format (GIỮ nguyên "Số nhà" prefix)
+        # Chỉ xóa "SN" vì nó là viết tắt không rõ nghĩa
+        address = re.sub(r'\bSN\s+', '', address)
+        address = re.sub(r',(?=[^\s])', ', ', address)  # Thêm khoảng trắng sau dấu phẩy nếu không có
+        address = re.sub(r'\s{2,}', ' ', address).strip()
+        
+        # Hàm tổng quát để chuẩn hóa số nhà
+        def _normalize_house_numbers(addr: str) -> str:
+            """
+            Chuẩn hóa số nhà theo các rule áp dụng cho TẤT CẢ format:
+            1. Loại bỏ khoảng trắng giữa số và ký tự: "5 C/1" -> "5C/1"
+            2. Loại bỏ khoảng trắng giữa ký tự+số và số khác: "25C 5" -> "25C/5"
+            3. Gộp các số liên tiếp cách bằng khoảng trắng: "29 31" -> "29-31"
+            4. Gộp các số có dấu phẩy: "29 31, 33" -> "29-31-33"
+            5. Xử lý kết hợp: "76/29 31, 33" -> "76/29-31-33"
+            """
+            result = addr
+            
+            # Rule 1: Loại bỏ khoảng trắng giữa số và ký tự (5 C/1 -> 5C/1)
+            result = re.sub(r'(\d+)\s+([A-Z])(/\d+)', r'\1\2\3', result)
+            
+            # Rule 1.5: Loại bỏ khoảng trắng giữa số và ký tự CUỐI CÙNG (quốc lộ 1 A -> quốc lộ 1A)
+            result = re.sub(r'(\d+)\s+([A-Z])(?=\s*[,.]|\s*$)', r'\1\2', result)
+            
+            # Rule 2: Gộp số+ký tự với số tiếp theo (25C 5 -> 25C/5)
+            result = re.sub(r'(\d+[A-Z])\s+(\d+)(?=\s*[,\s])', r'\1/\2', result)
+            
+            # Rule 3 & 4 & 5: Xử lý toàn bộ địa chỉ - không tách house_part/street_part
+            # Vì tách sẽ bỏ mất dấu phẩy và dấu cách. Thay vào đó xử lý trực tiếp
+            max_iterations = 10
+            iteration = 0
+            prev_result = ""
+            
+            while prev_result != result and iteration < max_iterations:
+                prev_result = result
+                iteration += 1
+                
+                # Thay dấu phẩy + số bằng hyphen hoặc slash tùy theo ký tự trước dấu phẩy
+                # "29, 31" -> "29-31" (số thuần -> hyphen)
+                # "25C, 5 Lý..." -> "25C/5, Lý..." (số+chữ -> slash + giữ comma cho phần sau)
+                result = re.sub(r'([A-Z]),\s*(\d)', r'\1/\2, ', result)  # Chữ cái + dấu phẩy + số -> slash + comma
+                result = re.sub(r'(\d),\s*(?=\d)', r'\1-', result)       # Số + dấu phẩy + số -> hyphen
+                
+                # Gộp các số cách nhau bằng khoảng trắng
+                result = re.sub(
+                    r'\b(\d+(?:[A-Z])?(?:/\d+)?(?:/[A-Z]\d+)?(?:-\d+)*)\s+(\d+)(?=\s*[-,A-Za-zĐđĂăÂâÊêÔôƠơƯư])',
+                    r'\1-\2',
+                    result
+                )
+            
+            return result
+        
+        address = _normalize_house_numbers(address)
 
         # Bước 2.2: Xử lý ký hiệu lô/ô/điểm dạng "D 10" -> "D10" hoặc "A 2" -> "A2"
         # Ví dụ: "D 10 Khuất Duy Tiến" -> "D10 Khuất Duy Tiến"
@@ -143,15 +185,15 @@ class AddressCleaner:
                 has_separator = ('/' in part) or ('-' in part)
 
                 if next_part and not self.is_admin_component(next_part) and (has_suffix or has_separator) and not is_pure_number:
-                    # Gộp số nhà với tên đường
-                    result_parts.append(part + ' ' + next_part)
+                    # Gộp số nhà với tên đường (GIỮ dấu phẩy!)
+                    result_parts.append(part + ', ' + next_part)
                     self.stats['merged_house_street'] += 1
                     i += 2
                     continue
 
                 # Trường hợp số thuần bị tách do dấu phẩy thừa: "04, Nguyên Tất Thành,, ..."
                 if had_double_comma and is_pure_number and next_part and not self.is_admin_component(next_part):
-                    result_parts.append(part + ' ' + next_part)
+                    result_parts.append(part + ', ' + next_part)
                     self.stats['merged_house_street'] += 1
                     i += 2
                     continue
@@ -276,8 +318,8 @@ class AddressCleaner:
 
 def main():
     """Hàm chính"""
-    input_file = Path("e:\\UnderFitting_SEG301\\data_sample\\sample.jsonl")
-    output_file = Path("e:\\UnderFitting_SEG301\\data_sample\\sample_cleaned.jsonl")
+    input_file = Path("D:\\final_merged_3.jsonl")
+    output_file = Path("D:\\final_merged_3_cleaned.jsonl")
     
     # Tạo instance
     cleaner = AddressCleaner()
@@ -298,3 +340,34 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    # Test case cho xử lý 2 số nhà cách nhau
+    print("\n" + "="*100)
+    print("TEST XỬ LÝ 2 SỐ NHÀ CÁCH NHAU".center(100))
+    print("="*100 + "\n")
+    
+    test_cases = [
+        "29 31 Đinh Bộ Lĩnh P.24, Quận Bình Thạnh, TP Hồ Chí Minh",
+        "5 7 Nguyễn Huệ, Quận 1, TP Hồ Chí Minh",
+        "12 14 16 Lê Thánh Tông, Phường Bến Nghé, Quận 1, TP Hồ Chí Minh",
+        "Lô A 2 Khu Công Nghiệp, Phường Tân Phú",
+        "100 102 Phan Xích Long, Phường 2, Quận Phú Nhuận, TP Hồ Chí Minh",
+        # Các trường hợp mới
+        "29 31, 33 Nguyễn Văn Trỗi P.12, Quận Phú Nhuận, TP Hồ Chí Minh",
+        "76/29 31, 33 Bà Hom, Phường 13, Quận 6, TP Hồ Chí Minh",
+        "10 12, 14, 16 Lê Lợi, Quận Hoàn Kiếm, Hà Nội",
+        "88/25 27, 29, 31 Nguyễn Trãi, Phường Bến Thành, Quận 1, TP Hồ Chí Minh",
+        # Các trường hợp với ký tự và dấu /
+        "5 C/1 Nguyễn Oanh, Phường 17, Quận Gò Vấp, TP Hồ Chí Minh",
+        "25C 5 Chu Văn An P.26, Quận Bình Thạnh, TP Hồ Chí Minh",
+        "3 B/4 Lý Thái Tổ, Hoàn Kiếm, Hà Nội",
+        "12A 7 Nguyễn Hữu Cảnh, Quận Bình Thạnh, TP Hồ Chí Minh",
+    ]
+    
+    cleaner = AddressCleaner()
+    for test in test_cases:
+        result = cleaner.clean_address(test)
+        if result != test:
+            print(f"✓ TRƯỚC:  {test}")
+            print(f"  SAU:    {result}")
+            print()
