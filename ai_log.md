@@ -742,7 +742,46 @@ Cung cấp code tokenize toàn bộ text trong mỗi JSON object, tính trung b�
 Gặp lỗi `JSONDecodeError`, [`1 dòng data lỗi`] Data này lỗi chỗ nào, sửa như thế nào
 
 **AI (ChatGPT):**  
-Phân tích ví dụ cụ thể, chỉ ra lỗi do dấu `"` không được escape trong chuỗi. Hướng dẫn sửa bằng `\"` và đề xuất script tự động làm sạch JSONL cho dataset lớn.
+Phân tích ví dụ cụ thể, chỉ ra lỗi do dấu `"` không được escape trong chuỗi. Hướng dẫn sửa bằng `\"` và đề xuất script tự động làm sạch JSONL cho dataset lớn
+
+---
+### Date: 2026-02-25
+
+**Task:** Tạo indexer và ranker 
+
+**User:**  
+Hãy tạo các file code cần thiết trong thư mục indexer của src thỏa mãn các yêu cầu:
+A. Các công việc cụ thể cần làm:
+Indexing (Hardcore): Code tay thuật toán SPIMI (Single-Pass In-Memory Indexing).
+Chia 1 triệu docs thành các block nhỏ.
+Index từng block trên RAM -> Ghi xuống đĩa.
+Merge các block lại thành file Inverted Index hoàn chỉnh.
+Ranking (Hardcore): Code tay thuật toán BM25.
+Tự tính TF, IDF, Average Document Length.
+Không được gọi hàm rank() của thư viện có sẵn.
+Console App: Viết chương trình chạy dòng lệnh cho phép nhập từ khóa và trả về kết quả top 10.
+B. Tiêu chí đánh giá:
+Thuật toán SPIMI: Implement đúng logic SPIMI. Chạy index 1 triệu docs không bị tràn RAM (Memory Error).
+Thuật toán BM25: Kết quả trả về hợp lý (Document chứa từ khóa nhiều và hiếm phải lên top).
+Hiệu năng: Tốc độ trả về kết quả tìm kiếm < 1 giây.
+Sử dụng file data là sample_cleaned.jsonl
+
+**AI (Claude):**  
+Tạo các file `spimi_indexer.py` và `bm25_ranker.py` trong ranking thỏa mãn yêu cầu, và tạo file INDEXER_README.md để tóm tắt thay đổi và hướng dẫn sử dụng app console
+
+---
+
+### Date: 2026-02-25
+
+**Task:** Sửa cấu trúc indexer và ranker 
+
+**User:**  
+Sửa lại phần demo bm25 ranking, khi chạy thì bị lỗi Index not found at inverted_index_demo
+
+**AI (Claude):**  
+Tìm thấy vẫn đề chính Hàm demo_indexing() chỉ chạy index_documents() nhưng không gọi merge_blocks() và finalize(). Điều này khiến index không hoàn chỉnh, thiếu file postings.bin.
+
+Sửa: Thêm 2 bước còn thiếu để hoàn chỉnh quá trình indexing (test_demo.py:82-85)
 
 ---
 
