@@ -791,18 +791,17 @@ Sửa: Thêm 2 bước còn thiếu để hoàn chỉnh quá trình indexing (te
 **User:**  
 Hãy thêm phần readme của indexer và ranking trong file INDEXER_README.md vào file tổng README.md, bỏ qua phần quich_search đi
 
-**AI (Claude):**  
-Sửa: Thêm Section 8: 🔍 Search Index Building & Ranking chứa:
-Cấu trúc thư mục indexer và ranking
-Hướng dẫn xây dựng index (Index Building)
-Hướng dẫn chạy Console App
-Chi tiết kỹ thuật về SPIMI và BM25
-Performance metrics
-Ví dụ sử dụng
-Debug & Troubleshooting
-Format dữ liệu JSONL
-Tham khảo
-Cập nhật số thứ tự các section còn lại (AI Usage & Transparency → Section 9, Notes → Section 10)
+**AI (Claude):**
+
+Sửa: Thêm Section 8 🔍 Search Index Building & Ranking chứa: 
+- Hướng dẫn xây dựng index (Index Building)
+- Hướng dẫn chạy Console App
+- Chi tiết kỹ thuật về SPIMI và BM25
+- Ví dụ sử dụng
+- Format dữ liệu JSONL
+- Tham khảo
+Cập nhật số thứ tự các section còn lại
+
 ---
 
 Thành viên 3: Duy
