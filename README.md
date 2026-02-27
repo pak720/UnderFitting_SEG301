@@ -78,8 +78,17 @@ UnderFitting_SEG301/
 │   │   └── Preprocessing.ipynb     # Code preprocessing data - check duplicate, remove duplicate, merge json...   
 │   │
 │   ├── indexer/            # Milestone 2: Index construction
+│   |   ├── __init__.py                 # Package initialization
+│   |   ├── __main__.py                 # Entry point for running as module
+│   |   ├── preprocessor.py             # Text preprocessing & tokenization
+│   |   ├── storage.py                  # Inverted index storage management
+│   |   ├── spimi_indexer.py           # SPIMI algorithm implementation
+│   |   ├── console_app.py             # Interactive console application
+│   |   └── index_builder.py           # Index building script
 │   │
 │   ├── ranking/            # Milestone 2 & 3: Ranking algorithms
+|   |   ├── __init__.py                 # Package initialization
+|   |   └── bm25_ranker.py             # BM25 ranking algorithm
 │   │
 │   └── ui/                 # Milestone 3: User Interface
 │
@@ -142,7 +151,157 @@ Preprocessing.ipynb
 
 ---
 
-## 8. 🤖 AI Usage & Transparency
+## 8. 🔍 Search Index Building & Ranking
+
+### Search System – SPIMI Indexing + BM25 Ranking
+
+This search system is built using:
+
+- **SPIMI (Single-Pass In-Memory Indexing)** for inverted index construction  
+- **BM25** for document ranking  
+
+---
+
+## 🚀 How to Use
+
+### 1️⃣ Build the Index
+
+First, build the inverted index from a JSONL file:
+
+```bash
+# Using sample file
+python index_builder.py data_sample/sample_cleaned.jsonl
+
+# Specify output directory
+python index_builder.py data_sample/sample_cleaned.jsonl --index-dir inverted_index
+
+# Specify memory limit (default: 500 MB)
+python index_builder.py data_sample/sample_cleaned.jsonl --memory 800
+```
+
+**Output:**
+- The system creates an ```inverted_index/``` folder containing:
+  - `postings.bin` - Binary index postings
+  - `terms.pkl` - Term mappings
+  - `doc_info.pkl` - Document information
+  - `metadata.json` - Index metadata
+
+##### 2. Run the Search Console
+
+After building the index:
+
+```bash
+python -m src.indexer
+# or
+python src/indexer/console_app.py
+```
+
+##### 3. Available Commands
+
+Inside the console:
+
+```
+search <query>              - Search documents
+  Example: search technology company
+
+explain <query> [index]     - Explain BM25 score
+  Example: explain technology company 0
+
+help                        - Show help
+exit                        - Exit application
+```
+
+#### 🔧 Core Components
+
+##### SPIMI Indexing (Single-Pass In-Memory Indexing)
+
+**Process:**
+1. Read documents from JSONL
+2. Text preprocessing (normalization, tokenization, stopword removal)
+3. Compute term frequency per document
+4. Build in-memory inverted index
+5. When memory limit is exceeded → write block to disk
+6. Merge all blocks into final inverted index
+
+**Memory limit (default):**
+```
+memory_limit_mb = 500
+```
+
+##### BM25 Ranking Algorithm
+
+**BM25 Formula:**
+```
+Score(q, d) = Σ IDF(qi) * (f(qi, d) * (k1 + 1)) / (f(qi, d) + k1 * (1 - b + b * |d|/avgdl))
+```
+
+Where:
+- `f(qi, d)` = Term frequency (TF)
+- `IDF(qi)` = log((N - n + 0.5) / (n + 0.5))
+- `k1` = 1.5 (saturation parameter)
+- `b` = 0.75 (length normalization parameter)
+- `|d|` = Document length
+- `avgdl` = Average document length
+
+**Implementation notes:**
+- ✅ No external ranking libraries used
+- ✅ IDF values are cached
+- ✅ Supports detailed score explanation
+
+#### 🔍 Example Usage
+
+##### Example 1: Search
+```
+➤ search technology company
+🔍 Searching for: technology company
+Query terms: technology, company
+────────────────────────────────────────
+Found 10 results in 45.23ms
+
+📄 Rank 1
+   Score: 12.4521
+   Company: ABC Technology Co., Ltd
+   Tax ID: 0123456789
+   Industry: Technology Services
+   Address: Ho Chi Minh City
+   Status: Active
+```
+
+##### Example 2: Explain Ranking
+```
+➤ explain technology company 0
+📊 Score Explanation for Result #1
+   Company: ABC Technology Co., Ltd
+   Total Score: 12.4521
+────────────────────────────────────────
+Document Length: 45 tokens
+Average Document Length: 38.25 tokens
+
+Term Contributions:
+  technology:
+    - Score: 4.2301
+    - IDF: 2.1456
+    - TF: 3
+```
+
+#### 📄 Dataset Format
+
+Input file: `data_sample/sample_cleaned.jsonl`
+
+Format JSONL:
+```json
+{"Tên doanh nghiệp": "...", "Mã số thuế": "...", "Địa chỉ": "...", ...}
+{"Tên doanh nghiệp": "...", "Mã số thuế": "...", "Địa chỉ": "...", ...}
+```
+
+#### 🎓 Performance (Reference)
+- Index building: ~100–200K documents/minute
+- Search latency: < 100ms (top 10 results)
+- Memory usage: ~500MB per block (configurable)
+
+---
+
+## 9. 🤖 AI Usage & Transparency
 
 AI tools (e.g., ChatGPT) were used only as coding and reasoning assistants during the development process.
 
@@ -159,7 +318,7 @@ This ensures transparency and compliance with academic integrity requirements.
 
 ---
 
-## 9. 📝 Notes
+## 10. 📝 Notes
 
 The full dataset is not included in this repository due to size limitations
 

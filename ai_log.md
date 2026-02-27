@@ -773,7 +773,7 @@ Tạo các file `spimi_indexer.py` và `bm25_ranker.py` trong ranking thỏa mã
 
 ### Date: 2026-02-25
 
-**Task:** Sửa cấu trúc indexer và ranker 
+**Task:** Sửa lỗi Index not found
 
 **User:**  
 Sửa lại phần demo bm25 ranking, khi chạy thì bị lỗi Index not found at inverted_index_demo
@@ -783,6 +783,26 @@ Tìm thấy vẫn đề chính Hàm demo_indexing() chỉ chạy index_documents
 
 Sửa: Thêm 2 bước còn thiếu để hoàn chỉnh quá trình indexing (test_demo.py:82-85)
 
+---
+### Date: 2026-02-27
+
+**Task:** Merge file README.md
+
+**User:**  
+Hãy thêm phần readme của indexer và ranking trong file INDEXER_README.md vào file tổng README.md, bỏ qua phần quich_search đi
+
+**AI (Claude):**  
+Sửa: Thêm Section 8: 🔍 Search Index Building & Ranking chứa:
+Cấu trúc thư mục indexer và ranking
+Hướng dẫn xây dựng index (Index Building)
+Hướng dẫn chạy Console App
+Chi tiết kỹ thuật về SPIMI và BM25
+Performance metrics
+Ví dụ sử dụng
+Debug & Troubleshooting
+Format dữ liệu JSONL
+Tham khảo
+Cập nhật số thứ tự các section còn lại (AI Usage & Transparency → Section 9, Notes → Section 10)
 ---
 
 Thành viên 3: Duy
