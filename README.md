@@ -169,14 +169,14 @@ This search system is built using:
 First, build the inverted index from a JSONL file:
 
 ```bash
-# Using sample file
-python index_builder.py data_sample/sample_cleaned.jsonl
+# Using sample file (from project root)
+python -m src.indexer.index_builder data_sample/sample_cleaned.jsonl
 
 # Specify output directory
-python index_builder.py data_sample/sample_cleaned.jsonl --index-dir inverted_index
+python -m src.indexer.index_builder data_sample/sample_cleaned.jsonl --index-dir inverted_index
 
 # Specify memory limit (default: 500 MB)
-python index_builder.py data_sample/sample_cleaned.jsonl --memory 800
+python -m src.indexer.index_builder data_sample/sample_cleaned.jsonl --memory 800
 ```
 
 **Output:**
@@ -193,7 +193,7 @@ After building the index:
 ```bash
 python -m src.indexer
 # or
-python src/indexer/console_app.py
+python src/ranking/console_app.py
 ```
 
 ##### 3. Available Commands
