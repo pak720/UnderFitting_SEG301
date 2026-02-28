@@ -4,6 +4,7 @@ import sys
 import time
 import json
 from pathlib import Path
+from typing import Tuple, List
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,6 +24,60 @@ class SearchEngine:
         self.ranker = None
         self.inverted_index = None
         self.doc_info = None
+        # Cache query preprocessing results to reduce repeated tokenization cost.
+        self._query_terms_cache = {}
+
+    def _parse_search_input(self, user_query: str) -> Tuple[str, int]:
+        """
+        Parse input for optional top-k.
+        Syntax supported:
+          - search công nghệ
+          - search công nghệ --top 20
+        """
+        query = user_query.strip()
+        top_k = 10
+
+        if " --top " in query:
+            raw, tail = query.rsplit(" --top ", 1)
+            try:
+                value = int(tail.strip())
+                if value > 0:
+                    top_k = min(value, 100)  # hard limit for safe console output
+                    query = raw.strip()
+            except ValueError:
+                # Keep defaults if parse fails.
+                pass
+
+        return query, top_k
+
+    def _get_query_terms(self, query: str):
+        """Get query terms with small cache for repeated console searches."""
+        cache_key = query.strip().lower()
+        if cache_key in self._query_terms_cache:
+            return self._query_terms_cache[cache_key]
+
+        terms = self.preprocessor.process(query, remove_stops=True)
+        if len(self._query_terms_cache) > 300:
+            self._query_terms_cache.clear()
+        self._query_terms_cache[cache_key] = terms
+        return terms
+
+    def _build_search_terms(self, query: str) -> Tuple[List[str], List[str]]:
+        """
+        Build (expanded_terms, intent_terms) from query.
+
+        - expanded_terms: used to retrieve more relevant candidates.
+        - intent_terms: used to enforce/boost precision (strict mode in ranker).
+        """
+        cache_key = f"enhanced::{query.strip().lower()}"
+        if cache_key in self._query_terms_cache:
+            return self._query_terms_cache[cache_key]
+
+        expanded_terms, intent_terms = self.preprocessor.build_search_terms(query)
+        if len(self._query_terms_cache) > 300:
+            self._query_terms_cache.clear()
+        self._query_terms_cache[cache_key] = (expanded_terms, intent_terms)
+        return expanded_terms, intent_terms
 
     def load_index(self) -> bool:
         """Load existing index from disk"""
@@ -56,22 +111,36 @@ class SearchEngine:
         print(f"\n🔍 Searching for: {query}")
         print("-" * 80)
 
-        start_time = time.time()
+        # perf_counter gives better precision for short operations.
+        start_time = time.perf_counter()
 
-        # Preprocess query
-        query_terms = self.preprocessor.process(query, remove_stops=True)
+        # Build enhanced terms for better precision on multilingual/domain queries.
+        query_terms, intent_terms = self._build_search_terms(query)
+        intent_group = self.preprocessor.detect_intent_group(query_terms)
 
         if not query_terms:
             print("❌ Query has no meaningful terms after preprocessing")
             return
 
         print(f"Query terms: {', '.join(query_terms)}")
+        if intent_terms:
+            print(f"Intent terms (strict): {', '.join(intent_terms)}")
+        if intent_group:
+            print(f"Intent group: {intent_group}")
         print("-" * 80)
 
         # Rank documents
-        results = self.ranker.rank_documents(query_terms, top_k)
+        # Pass raw query to enable exact phrase/keyword boosting in ranker.
+        results = self.ranker.rank_documents(
+            query_terms,
+            top_k,
+            raw_query=query,
+            intent_terms=intent_terms,
+            strict_intent=True,
+            intent_group=intent_group
+        )
 
-        end_time = time.time()
+        end_time = time.perf_counter()
         search_time = end_time - start_time
 
         if not results:
@@ -101,12 +170,20 @@ class SearchEngine:
             return
 
         # Get results
-        query_terms = self.preprocessor.process(query, remove_stops=True)
+        query_terms, intent_terms = self._build_search_terms(query)
+        intent_group = self.preprocessor.detect_intent_group(query_terms)
         if not query_terms:
             print("❌ Query has no meaningful terms")
             return
 
-        results = self.ranker.rank_documents(query_terms, 10)
+        results = self.ranker.rank_documents(
+            query_terms,
+            10,
+            raw_query=query,
+            intent_terms=intent_terms,
+            strict_intent=True,
+            intent_group=intent_group
+        )
 
         if result_index >= len(results):
             print(f"❌ Result index out of range (0-{len(results)-1})")
@@ -144,7 +221,8 @@ class SearchEngine:
 AVAILABLE COMMANDS:
 ───────────────────────────────────────────────────────────────────────────
 
-  search <query>          : Search for documents. Example: search công ty TP.HCM
+        search <query>          : Search for documents. Example: search công ty TP.HCM
+        search <query> --top N  : Search and return top N results (max 100)
   explain <query> [n]     : Explain ranking for n-th result (0-indexed)
   exit                    : Exit the application
   help                    : Show this help message
@@ -152,7 +230,9 @@ AVAILABLE COMMANDS:
 EXAMPLES:
 ───────────────────────────────────────────────────────────────────────────
 
-  search doanh nghiệp công nghệ
+        search doanh nghiệp công nghệ
+        search electric company
+    search doanh nghiệp công nghệ --top 20
   search địa chỉ hà nội
   explain doanh nghiệp công nghệ 0
   explain doanh nghiệp công nghệ 5
@@ -160,7 +240,9 @@ EXAMPLES:
 NOTES:
 ───────────────────────────────────────────────────────────────────────────
   • Stopwords are automatically removed during processing
-  • Results are ranked by BM25 score
+        • Results are ranked by BM25 + keyword precision boosting
+    • English query terms are expanded to related Vietnamese domain terms
+    • Strict intent filtering is enabled for better precision
   • Top 10 results are returned by default
   • Search is case-insensitive and accents are normalized
 """
@@ -202,8 +284,11 @@ NOTES:
                     if len(parts) < 2:
                         print("❌ Usage: search <query>")
                     else:
-                        query = parts[1]
-                        self.search(query, top_k=10)
+                        query, top_k = self._parse_search_input(parts[1])
+                        if not query:
+                            print("❌ Usage: search <query> [--top N]")
+                        else:
+                            self.search(query, top_k=top_k)
 
                 elif cmd == "explain":
                     if len(parts) < 2:
