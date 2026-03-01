@@ -201,17 +201,129 @@ python src/ranking/console_app.py
 Inside the console:
 
 ```
-search <query>              - Search documents
+search <query>              - Search documents by industry/business type
   Example: search technology company
 
-explain <query> [index]     - Explain BM25 score
+search2 <industry> <city>   - Search by industry AND city (auto-detect city)
+  Example: search2 nhà hàng hà nội
+           search2 dệt may hải phòng --top 15
+
+search <query> --top N      - Return top N results (max 100)
+  Example: search technology company --top 20
+
+explain <query> [index]     - Explain BM25 score for result
   Example: explain technology company 0
 
-help                        - Show help
+help                        - Show help and available commands
 exit                        - Exit application
 ```
 
-#### 🔧 Core Components
+##### 4. New Feature: Search by Industry + City (search2)
+
+**Purpose:**  
+Find companies by combining **industry/business type** and **geographic location** for precise results.
+
+**Algorithm:**
+1. Extract industry keywords from the query
+2. Automatically detect city/province name (from 63 Vietnamese provinces/cities)
+3. Search in Industry field for industry keywords
+4. Filter results by city extracted from Address field
+5. Return combined results with location information
+
+**Syntax:**
+```bash
+search2 <industry_keyword> <city_name> [--top N]
+```
+
+**Examples:**
+
+```bash
+# Find restaurants in Hanoi
+search2 nhà hàng hà nội
+
+# Find textile companies in Hai Phong (top 15 results)
+search2 dệt may hải phòng --top 15
+
+# Find technology companies in Ho Chi Minh City
+search2 công ty công nghệ tp hcm
+
+# Find pharmacies in Thai Nguyen
+search2 nhà thuốc thái nguyên
+
+# Find food/beverage businesses in Da Nang
+search2 thực phẩm đà nẵng --top 20
+```
+
+**Supported Cities (63 Vietnamese Provinces & Cities):**
+
+Major Cities:
+- Hà Nội, Hồ Chí Minh, Đà Nẵng, Hải Phòng, Cần Thơ
+
+Northern Region:
+- Thái Nguyên, Tuyên Quang, Sơn La, Bắc Ninh, Phú Thọ, Yên Bái, Hòa Bình, Lạng Sơn, Cao Bằng, Quảng Ninh, Điện Biên, Lai Châu, Hà Giang
+
+North Central:
+- Thanh Hóa, Nghệ An, Hà Tĩnh, Quảng Bình, Quảng Trị
+
+Central:
+- Thừa Thiên Huế, Quảng Nam, Quảng Ngãi, Bình Định, Phú Yên
+
+South Central:
+- Khánh Hòa, Ninh Thuận, Bình Thuận
+
+Southeast:
+- Long An, Đồng Tháp, An Giang, Kiên Giang, Cà Mau, Bến Tre, Trà Vinh, Vĩnh Long, Tiền Giang, Bình Dương, Bình Phước, Đồng Nai, Tây Ninh
+
+Highlands:
+- Lâm Đồng, Đắk Lắk, Đắk Nông
+
+**Output Example:**
+
+```
+➤ search2 nhà hàng hà nội
+
+🔍 Searching by Industry + City
+   Industry: nhà hàng
+   City: hà nội
+────────────────────────────────────────
+Industry query terms: nhà hàng
+────────────────────────────────────────
+
+Found 5 results in 23.45ms
+
+📄 Rank 1
+   Score: 8.2341
+   Company: Nhà Hàng ABC
+   Tax ID: 0123456789
+   Industry: Dịch vụ ăn uống khác
+   City: hà nội
+   Address: 123 Tran Hung Dao, Quan Hoan Kiem, Ha Noi
+   Status: Active
+
+📄 Rank 2
+   Score: 7.8956
+   Company: Quán Ăn XYZ
+   ...
+```
+
+**Key Features:**
+- ✅ Automatic city detection from query (no need for separate parameters)
+- ✅ Filters by Address field for geographic accuracy
+- ✅ Supports all 63 Vietnamese provinces and cities
+- ✅ Case-insensitive and accent-normalized
+- ✅ Optional `--top N` limit (default: 10 results, max: 100)
+
+**Difference between `search` and `search2`:**
+
+| Feature | search | search2 |
+|---------|--------|---------|
+| Search by industry | ✅ | ✅ |
+| Filter by city | ❌ | ✅ |
+| City auto-detection | N/A | ✅ |
+| Address field | Display only | Filter results |
+| Use case | General industry search | Location-aware search |
+
+---
 
 ##### SPIMI Indexing (Single-Pass In-Memory Indexing)
 
