@@ -57,6 +57,38 @@ class TextPreprocessor:
             reverse=True
         )
 
+        # Vietnamese city/province phrases for address-based segmentation
+        # Used to preserve city names when processing addresses (for industry+city search)
+        self.city_phrases = {
+            # Major cities
+            'hà nội', 'hồ chí minh', 'đà nẵng', 'hải phòng', 'cần thơ',
+            # Northern provinces
+            'thái nguyên', 'tuyên quang', 'sơn la', 'bắc ninh', 'phú thọ',
+            'yên bái', 'hòa bình', 'lạng sơn', 'cao bằng', 'quảng ninh',
+            # North central
+            'thanh hóa', 'nghệ an', 'hà tĩnh', 'quảng bình', 'quảng trị',
+            # Central
+            'thừa thiên huế', 'quảng nam', 'quảng ngãi', 'bình định', 'phú yên',
+            # South central
+            'khánh hòa', 'ninh thuận', 'bình thuận',
+            # Southeast
+            'long an', 'đồng tháp', 'an giang', 'kiên giang', 'cà mau',
+            'bến tre', 'trà vinh', 'vĩnh long', 'tiền giang',
+            # East
+            'bình dương', 'bình phước', 'đồng nai', 'tây ninh',
+            # Highlands
+            'lâm đồng', 'đắk lắk', 'đắk nông',
+            # Far north
+            'điện biên', 'lai châu', 'hà giang',
+        }
+
+        # Precomputed city phrase list for address matching
+        self._city_phrase_tuples = sorted(
+            [tuple(self.normalize_text(p).split()) for p in self.city_phrases if p.strip()],
+            key=len,
+            reverse=True
+        )
+
         # Query expansion dictionary (fallback by term).
         # IMPORTANT:
         # - Keep each list focused to avoid cross-domain noise.
@@ -219,11 +251,13 @@ class TextPreprocessor:
     def segment_phrases(self, tokens: List[str]) -> List[str]:
         """
         Segment token list into phrase tokens using maximum/longest matching.
+        Handles both industry phrases and city/province names.
 
         Example:
             ["công", "nghiệp", "dệt", "may"] -> ["công", "nghiệp", "dệt_may"]
+            ["quân", "hoàn", "kiếm", "hà", "nội"] -> ["quân", "hoàn", "kiếm", "hà_nội"]
         """
-        if not tokens or not self._phrase_tuples:
+        if not tokens:
             return tokens
 
         segmented: List[str] = []
@@ -232,8 +266,9 @@ class TextPreprocessor:
         while i < len(tokens):
             matched = False
 
-            # Try longest phrase first, then shorter phrases.
-            for phrase in self._phrase_tuples:
+            # Try longest phrases first (industry + city combined, sorted by length)
+            all_phrases = sorted(self._phrase_tuples + self._city_phrase_tuples, key=len, reverse=True)
+            for phrase in all_phrases:
                 phrase_len = len(phrase)
                 if i + phrase_len > len(tokens):
                     continue

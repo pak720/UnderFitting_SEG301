@@ -150,20 +150,23 @@ class BM25Ranker:
 
     def _doc_contains_intent_primary(self, doc_id: int, terms: List[str]) -> bool:
         """
-        Strict intent check on Industry field only.
-        User requirement: keyword intent should be matched in
-        "Ngành nghề kinh doanh" instead of other fields.
+        Strict intent check on primary business fields only.
+        This avoids false positives from address/noisy fields.
         """
         if not terms:
             return True
 
         fields = self._get_doc_fields_lower(doc_id)
-        industry_text = fields.get('Ngành nghề kinh doanh', '')
-        return any(self._text_contains_term(industry_text, term) for term in terms)
+        primary_text = ' '.join([
+            fields.get('Tên doanh nghiệp', ''),
+            fields.get('Tên giao dịch', ''),
+            fields.get('Ngành nghề kinh doanh', ''),
+        ])
+        return any(self._text_contains_term(primary_text, term) for term in terms)
 
     def _doc_passes_intent_column_rules(self, doc_id: int, intent_group: Optional[str]) -> bool:
         """
-        Apply column-aware intent rules on Industry field.
+        Apply column-aware intent rules on primary business fields.
         If group has positive terms, doc should match at least one positive term.
         If group has negative terms, doc should not be dominated by those terms.
         """
@@ -175,15 +178,19 @@ class BM25Ranker:
             return True
 
         fields = self._get_doc_fields_lower(doc_id)
-        industry_text = fields.get('Ngành nghề kinh doanh', '')
+        primary_text = ' '.join([
+            fields.get('Tên doanh nghiệp', ''),
+            fields.get('Tên giao dịch', ''),
+            fields.get('Ngành nghề kinh doanh', ''),
+        ])
 
         positive = rule.get('positive', set())
         negative = rule.get('negative', set())
 
-        has_positive = any(self._text_contains_term(industry_text, term) for term in positive) if positive else True
-        has_negative = any(self._text_contains_term(industry_text, term) for term in negative) if negative else False
+        has_positive = any(self._text_contains_term(primary_text, term) for term in positive) if positive else True
+        has_negative = any(self._text_contains_term(primary_text, term) for term in negative) if negative else False
 
-        # Strict: must satisfy positive intent and avoid negative intent in Industry column.
+        # Strict: must satisfy positive intent and avoid negative intent in primary business columns.
         return has_positive and not has_negative
 
     def _compute_keyword_boost(self, query_terms: List[str], raw_query: str, doc_id: int) -> float:
