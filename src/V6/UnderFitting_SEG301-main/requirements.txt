@@ -1,0 +1,25 @@
+# Core data processing
+numpy
+pandas
+
+# JSON / streaming large files
+ijson
+
+# Progress bar
+tqdm
+
+# NLP & Embedding
+sentence-transformers
+torch
+
+# Similarity / vector computation
+scikit-learn
+
+# Optional: text processing
+regex
+
+# Visualization (nếu có dùng kiểm tra dữ liệu)
+matplotlib
+
+# Jupyter / Colab environment
+ipython
