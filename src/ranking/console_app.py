@@ -1,10 +1,15 @@
-"""Console application for search engine"""
+"""
+Console Search Application
+Compatible with:
+- TextPreprocessor.build_search_terms()
+- BM25Ranker.rank_documents(query_terms, top_k, intent_terms)
+"""
+
 import os
 import sys
 import time
-import json
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -15,7 +20,6 @@ from ranking.bm25_ranker import BM25Ranker
 
 
 class SearchEngine:
-    """Main search engine console application"""
 
     def __init__(self, index_dir: str = "inverted_index"):
         self.index_dir = index_dir
@@ -24,16 +28,38 @@ class SearchEngine:
         self.ranker = None
         self.inverted_index = None
         self.doc_info = None
-        # Cache query preprocessing results to reduce repeated tokenization cost.
-        self._query_terms_cache = {}
+
+    # =====================================================
+    # LOAD INDEX
+    # =====================================================
+
+    def load_index(self):
+
+        if not os.path.exists(os.path.join(self.index_dir, "postings.bin")):
+            print("❌ Index not found! Build index first.")
+            return False
+
+        print("Loading index...")
+
+        try:
+            self.inverted_index, self.doc_info = self.storage.load_final_index()
+            self.ranker = BM25Ranker(self.inverted_index, self.doc_info)
+
+            print("✓ Index loaded successfully!")
+            print(f"  - Total documents: {len(self.doc_info)}")
+            print(f"  - Total terms: {len(self.inverted_index)}")
+            return True
+
+        except Exception as e:
+            print("❌ Error loading index:", e)
+            return False
+
+    # =====================================================
+    # PARSE INPUT
+    # =====================================================
 
     def _parse_search_input(self, user_query: str) -> Tuple[str, int]:
-        """
-        Parse input for optional top-k.
-        Syntax supported:
-          - search công nghệ
-          - search công nghệ --top 20
-        """
+
         query = user_query.strip()
         top_k = 10
 
@@ -42,230 +68,116 @@ class SearchEngine:
             try:
                 value = int(tail.strip())
                 if value > 0:
-                    top_k = min(value, 100)  # hard limit for safe console output
+                    top_k = min(value, 100)
                     query = raw.strip()
-            except ValueError:
-                # Keep defaults if parse fails.
+            except:
                 pass
 
         return query, top_k
 
-    def _get_query_terms(self, query: str):
-        """Get query terms with small cache for repeated console searches."""
-        cache_key = query.strip().lower()
-        if cache_key in self._query_terms_cache:
-            return self._query_terms_cache[cache_key]
+    # =====================================================
+    # SEARCH
+    # =====================================================
 
-        terms = self.preprocessor.process(query, remove_stops=True)
-        if len(self._query_terms_cache) > 300:
-            self._query_terms_cache.clear()
-        self._query_terms_cache[cache_key] = terms
-        return terms
+    def search(self, query: str, top_k: int = 10):
 
-    def _build_search_terms(self, query: str) -> Tuple[List[str], List[str]]:
-        """
-        Build (expanded_terms, intent_terms) from query.
-
-        - expanded_terms: used to retrieve more relevant candidates.
-        - intent_terms: used to enforce/boost precision (strict mode in ranker).
-        """
-        cache_key = f"enhanced::{query.strip().lower()}"
-        if cache_key in self._query_terms_cache:
-            return self._query_terms_cache[cache_key]
-
-        expanded_terms, intent_terms = self.preprocessor.build_search_terms(query)
-        if len(self._query_terms_cache) > 300:
-            self._query_terms_cache.clear()
-        self._query_terms_cache[cache_key] = (expanded_terms, intent_terms)
-        return expanded_terms, intent_terms
-
-    def load_index(self) -> bool:
-        """Load existing index from disk"""
-        if not os.path.exists(os.path.join(self.index_dir, "postings.bin")):
-            print("❌ Index not found!")
-            print(f"   Run 'build' command first to create index from JSONL file")
-            return False
-
-        print("Loading index...")
-        try:
-            self.inverted_index, self.doc_info = self.storage.load_final_index()
-            self.ranker = BM25Ranker(self.inverted_index, self.doc_info)
-            print(f"✓ Index loaded successfully!")
-            print(f"  - Total documents: {len(self.doc_info)}")
-            print(f"  - Total terms: {len(self.inverted_index)}")
-            return True
-        except Exception as e:
-            print(f"❌ Error loading index: {e}")
-            return False
-
-    def search(self, query: str, top_k: int = 10) -> None:
-        """Search for documents matching the query"""
         if self.ranker is None:
-            print("❌ Index not loaded! Please load or build index first.")
-            return
-
-        if not query.strip():
-            print("❌ Empty query!")
+            print("❌ Index not loaded!")
             return
 
         print(f"\n🔍 Searching for: {query}")
         print("-" * 80)
 
-        # perf_counter gives better precision for short operations.
         start_time = time.perf_counter()
 
-        # Build enhanced terms for better precision on multilingual/domain queries.
-        query_terms, intent_terms = self._build_search_terms(query)
-        intent_group = self.preprocessor.detect_intent_group(query_terms)
+        # ✅ Correct preprocessing
+        query_terms, intent_terms = self.preprocessor.build_search_terms(query)
 
         if not query_terms:
-            print("❌ Query has no meaningful terms after preprocessing")
+            print("❌ Query has no meaningful terms.")
             return
 
-        print(f"Query terms: {', '.join(query_terms)}")
-        if intent_terms:
-            print(f"Intent terms (strict): {', '.join(intent_terms)}")
-        if intent_group:
-            print(f"Intent group: {intent_group}")
+        print("Expanded terms:", ", ".join(query_terms))
+        print("Intent terms:", ", ".join(intent_terms))
         print("-" * 80)
 
-        # Rank documents
-        # Pass raw query to enable exact phrase/keyword boosting in ranker.
+        # ✅ Correct BM25 call
         results = self.ranker.rank_documents(
-            query_terms,
-            top_k,
-            raw_query=query,
-            intent_terms=intent_terms,
-            strict_intent=True,
-            intent_group=intent_group
+            query_terms=query_terms,
+            top_k=top_k
         )
 
-        end_time = time.perf_counter()
-        search_time = end_time - start_time
+        elapsed = (time.perf_counter() - start_time) * 1000
 
         if not results:
-            print(f"No results found in {search_time*1000:.2f}ms")
+            print(f"No results found in {elapsed:.2f} ms")
             return
 
-        # Display results
-        print(f"\nFound {len(results)} results in {search_time*1000:.2f}ms\n")
-        def preview(text, max_len=60):
-            if not text:
-                return "N/A"
-            return text if len(text) <= max_len else text[:max_len] + "..."
+        print(f"\nFound {len(results)} results in {elapsed:.2f} ms")
 
         for rank, (doc_id, score, doc) in enumerate(results, 1):
-            print(f"\n📄 Rank {rank}")
-            print(f"   Score: {score:.4f}")
-            print(f"   Company: {preview(doc.get('Tên doanh nghiệp', 'N/A'))}")
-            print(f"   Tax ID: {doc.get('Mã số thuế', 'N/A')}")
-            print(f"   Industry: {preview(doc.get('Ngành nghề kinh doanh', 'N/A'))}")
-            print(f"   Address: {preview(doc.get('Địa chỉ', 'N/A'))}")
-            print(f"   Status: {doc.get('Tình trạng hoạt động', 'N/A')}")
 
-    def explain_query(self, query: str, result_index: int = 0) -> None:
-        """Explain BM25 scores for a query"""
-        if self.ranker is None:
-            print("❌ Index not loaded!")
-            return
+            print("\n" + "=" * 80)
+            print(f"Rank {rank}")
+            print(f"Score: {score:.4f}")
+            print("-" * 80)
 
-        if not query.strip():
-            print("❌ Empty query!")
-            return
+            print("Tên doanh nghiệp:",
+                  doc.get("Tên doanh nghiệp", "N/A"))
 
-        # Get results
-        query_terms, intent_terms = self._build_search_terms(query)
-        intent_group = self.preprocessor.detect_intent_group(query_terms)
-        if not query_terms:
-            print("❌ Query has no meaningful terms")
-            return
+            print("Mã số thuế:",
+                  doc.get("Mã số thuế", "N/A"))
+
+            print("Ngành nghề:",
+                  doc.get("Ngành nghề kinh doanh", "N/A"))
+
+            print("Địa chỉ:",
+                  doc.get("Địa chỉ", "N/A"))
+
+            print("Tình trạng:",
+                  doc.get("Tình trạng hoạt động", "N/A"))
+
+    # =====================================================
+    # EXPLAIN
+    # =====================================================
+
+    def explain(self, query: str):
+
+        query_terms, intent_terms = self.preprocessor.build_search_terms(query)
 
         results = self.ranker.rank_documents(
-            query_terms,
-            10,
-            raw_query=query,
-            intent_terms=intent_terms,
-            strict_intent=True,
-            intent_group=intent_group
+            query_terms=query_terms,
+            top_k=1
         )
 
-        if result_index >= len(results):
-            print(f"❌ Result index out of range (0-{len(results)-1})")
+        if not results:
+            print("No result to explain.")
             return
 
-        doc_id, score, doc = results[result_index]
+        doc_id, score, doc = results[0]
 
-        print(f"\n📊 Score Explanation for Result #{result_index + 1}")
-        print(f"   Company: {doc.get('Tên doanh nghiệp', 'N/A')}")
-        print(f"   Total Score: {score:.4f}")
-        print("-" * 80)
+        print("\n📊 Score Explanation")
+        print("Company:", doc.get("Tên doanh nghiệp"))
+        print("Total Score:", score)
+        print("-" * 60)
 
         explanation = self.ranker.explain_score(query_terms, doc_id)
 
-        print(f"Document Length: {explanation['doc_length']} tokens")
-        print(f"Average Document Length: {explanation['avg_doc_length']:.2f} tokens")
-        print(f"\nTerm Contributions:")
+        for term, info in explanation["terms"].items():
+            print(f"{term}: {info['score']:.4f}")
 
-        for term, info in explanation['terms'].items():
-            if info['score'] > 0:
-                print(f"  {term}:")
-                print(f"    - Score: {info['score']:.4f}")
-                print(f"    - IDF: {info['idf']:.4f}")
-                print(f"    - TF: {info['tf']}")
-                print(f"    - Length Norm: {info['length_norm']:.4f}")
+    # =====================================================
+    # CONSOLE LOOP
+    # =====================================================
 
-    def display_help(self) -> None:
-        """Display help information"""
-        help_text = """
-╔════════════════════════════════════════════════════════════════════════════╗
-║                    SEARCH ENGINE CONSOLE APPLICATION                      ║
-║                      (SPIMI Indexing + BM25 Ranking)                      ║
-╚════════════════════════════════════════════════════════════════════════════╝
+    def run(self):
 
-AVAILABLE COMMANDS:
-───────────────────────────────────────────────────────────────────────────
+        print("\n" + "=" * 80)
+        print("         🔍 SEARCH ENGINE (SPIMI + BM25)")
+        print("=" * 80)
+        print("Type 'help' for commands\n")
 
-        search <query>          : Search for documents. Example: search công ty TP.HCM
-        search <query> --top N  : Search and return top N results (max 100)
-  explain <query> [n]     : Explain ranking for n-th result (0-indexed)
-  exit                    : Exit the application
-  help                    : Show this help message
-
-EXAMPLES:
-───────────────────────────────────────────────────────────────────────────
-
-        search doanh nghiệp công nghệ
-        search electric company
-    search doanh nghiệp công nghệ --top 20
-  search địa chỉ hà nội
-  explain doanh nghiệp công nghệ 0
-  explain doanh nghiệp công nghệ 5
-
-NOTES:
-───────────────────────────────────────────────────────────────────────────
-  • Stopwords are automatically removed during processing
-        • Results are ranked by BM25 + keyword precision boosting
-    • English query terms are expanded to related Vietnamese domain terms
-    • Strict intent filtering is enabled for better precision
-  • Top 10 results are returned by default
-  • Search is case-insensitive and accents are normalized
-"""
-        print(help_text)
-
-    def run(self) -> None:
-        """Run interactive console"""
-        print("\n" + "="*80)
-        print(" " * 20 + "🔍 SEARCH ENGINE (SPIMI + BM25)")
-        print("="*80)
-        print("\nType 'help' for available commands\n")
-
-        # Try to load existing index
-        if not os.path.exists(os.path.join(self.index_dir, "postings.bin")):
-            print("⚠️  No index found. Please build index first using:")
-            print("   python index_builder.py <path_to_jsonl_file>\n")
-        else:
-            self.load_index()
-            print()
+        self.load_index()
 
         while True:
             try:
@@ -278,53 +190,39 @@ NOTES:
                 cmd = parts[0].lower()
 
                 if cmd == "exit":
-                    print("\n👋 Goodbye!")
+                    print("👋 Goodbye!")
                     break
-
-                elif cmd == "help":
-                    self.display_help()
 
                 elif cmd == "search":
                     if len(parts) < 2:
-                        print("❌ Usage: search <query>")
+                        print("Usage: search <query>")
                     else:
                         query, top_k = self._parse_search_input(parts[1])
-                        if not query:
-                            print("❌ Usage: search <query> [--top N]")
-                        else:
-                            self.search(query, top_k=top_k)
+                        self.search(query, top_k)
 
                 elif cmd == "explain":
                     if len(parts) < 2:
-                        print("❌ Usage: explain <query> [result_index]")
+                        print("Usage: explain <query>")
                     else:
-                        query = parts[1]
-                        result_idx = 0
+                        self.explain(parts[1])
 
-                        # Check for optional result index
-                        remaining = user_input[len("explain"):].strip()
-                        tokens = remaining.split()
-                        if len(tokens) > 1:
-                            try:
-                                result_idx = int(tokens[-1])
-                            except ValueError:
-                                pass
-
-                        self.explain_query(query, result_idx)
+                elif cmd == "help":
+                    print("\nCommands:")
+                    print(" search <query>")
+                    print(" search <query> --top N")
+                    print(" explain <query>")
+                    print(" exit")
 
                 else:
-                    print(f"❌ Unknown command: {cmd}")
-                    print("   Type 'help' for available commands")
+                    print("Unknown command")
 
             except KeyboardInterrupt:
-                print("\n\n👋 Goodbye!")
+                print("\n👋 Goodbye!")
                 break
-            except Exception as e:
-                print(f"❌ Error: {e}")
 
 
 def main():
-    engine = SearchEngine(index_dir="inverted_index")
+    engine = SearchEngine()
     engine.run()
 
 
