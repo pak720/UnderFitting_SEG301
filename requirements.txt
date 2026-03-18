@@ -1,25 +1,53 @@
 # Core data processing
-numpy
-pandas
+numpy>=1.24.0,<2.0.0
+pandas>=1.5.0
 
 # JSON / streaming large files
-ijson
+ijson>=3.2.0
 
 # Progress bar
-tqdm
+tqdm>=4.65.0
 
-# NLP & Embedding
-sentence-transformers
-torch
+# NLP & Embeddings (PyTorch backend)
+torch>=2.0.0
+sentence-transformers>=2.6.0
 
 # Similarity / vector computation
-scikit-learn
+scikit-learn>=1.2.0
 
-# Optional: text processing
-regex
+# Vector Search - FAISS
+faiss-cpu>=1.7.4
 
-# Visualization (nếu có dùng kiểm tra dữ liệu)
-matplotlib
+# Vietnamese NLP
+underthesea>=6.8.0
+pyvi>=0.1.1
 
-# Jupyter / Colab environment
-ipython
+# Text processing
+regex>=2023.6.3
+
+# Web scraping & async HTTP
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+aiohttp>=3.8.0
+
+# Browser automation
+selenium>=4.10.0
+webdriver-manager>=4.0.0
+
+# Fuzzy matching & Unicode normalization
+rapidfuzz>=3.0.0
+unidecode>=1.3.6
+
+# System monitoring
+psutil>=5.9.0
+
+# Web Interface
+streamlit>=1.28.0
+streamlit-option-menu>=0.3.2
+
+# Visualization
+matplotlib>=3.6.0
+plotly>=5.13.0
+
+# Jupyter / development
+ipython>=8.0.0

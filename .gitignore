@@ -205,3 +205,20 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Full data
+data_sample\final_merged.jsonl
+
+# Streamlit cache
+.streamlit/
+.streamlit_cache/
+streamlit_cache/
+
+# Vector indices (large files)
+vector_index/
+*.index
+*.pkl
+
+# AI logs
+ai_log.md

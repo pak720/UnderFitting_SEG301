@@ -77,22 +77,28 @@ UnderFitting_SEG301/
 │   │   └── company_with_reviews.py     # Code merging reviews with data - thredshold 0.9
 │   │   └── Preprocessing.ipynb     # Code preprocessing data - check duplicate, remove duplicate, merge json...   
 │   │
-│   ├── indexer/            # Milestone 2: Index construction
+│   ├── indexer/            # Milestone 2 & 3: Index construction
 │   |   ├── __init__.py                 # Package initialization
 │   |   ├── __main__.py                 # Entry point for running as module
 │   |   ├── preprocessor.py             # Text preprocessing & tokenization
 │   |   ├── storage.py                  # Inverted index storage management
-│   |   ├── spimi_indexer.py           # SPIMI algorithm implementation
-│   |   ├── console_app.py             # Interactive console application
-│   |   └── index_builder.py           # Index building script
+│   |   ├── spimi_indexer.py            # SPIMI algorithm implementation
+│   |   ├── console_app.py              # Interactive console application
+│   |   ├── index_builder.py            # BM25 index building script
+│   |   ├── vector_indexer.py           # NEW: Vector index builder (GPU, resume)
+│   |   └── build_vector_index.py       # NEW: CLI entry point for vector indexer
 │   │
 │   ├── ranking/            # Milestone 2 & 3: Ranking algorithms
 |   |   ├── __init__.py                 # Package initialization
-|   |   └── bm25_ranker.py             # BM25 ranking algorithm
+|   |   ├── bm25_ranker.py              # BM25 ranking algorithm
+|   |   ├── vector_searcher.py          # NEW: Semantic search with FAISS
+|   |   └── hybrid_search.py            # NEW: Hybrid BM25 + Vector ranking
 │   │
 │   └── ui/                 # Milestone 3: User Interface
+│       └── app.py                      # NEW: Streamlit web interface
 │
-└── tests/                  # (Recommended) Unit tests for core algorithms
+├── evaluation.py                       # NEW: Evaluation framework (Precision, Recall, MRR)
+└── tests/                              # (Recommended) Unit tests for core algorithms
 
 ```
 Each component is designed to be independent but composable, allowing the system to scale and evolve across milestones.
@@ -413,7 +419,99 @@ Format JSONL:
 
 ---
 
-## 9. 🤖 AI Usage & Transparency
+---
+
+## 9. 🧠 Milestone 3: Vector Search & Web Interface
+
+This milestone extends the search engine with semantic search capabilities and a web UI.
+
+### New Components
+
+| Component | Description |
+|-----------|-------------|
+| `src/indexer/vector_indexer.py` | Builds FAISS vector index from JSONL using Sentence-Transformers (GPU, producer-consumer pipeline, resume) |
+| `src/ranking/vector_searcher.py` | Semantic search over FAISS index |
+| `src/ranking/hybrid_search.py` | Combines BM25 + Vector search with configurable weights |
+| `src/ui/app.py` | Streamlit web interface with BM25 / Vector / Hybrid modes |
+| `evaluation.py` | Evaluation framework (Precision@10, Recall@10, MRR) |
+
+---
+
+### Step 1: Build BM25 Index (if not done)
+
+```bash
+python -m src.indexer.index_builder data_sample/sample_cleaned.jsonl
+```
+
+### Step 2: Build Vector Index
+
+```bash
+# Basic (auto-detects GPU)
+python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl
+
+# Specify output directory
+python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --index-dir vector_index
+
+# Force GPU + FP16 for ~2x speed
+python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --device cuda --fp16
+
+# Limit documents (for testing)
+python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --max-docs 1000
+
+# Rebuild from scratch (ignore checkpoint)
+python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --no-resume
+```
+
+> **Resume:** If the process is interrupted (Ctrl+C), it saves a checkpoint automatically.
+> Simply run the same command again — it will resume from where it stopped.
+
+**Output files in `vector_index/`:**
+- `vector.index` — FAISS index
+- `id_to_doc.pkl` — Document mapping
+- `metadata.json` — Index metadata
+
+### Step 3: Run Web Interface
+
+```bash
+streamlit run src/ui/app.py
+```
+
+Then visit: `http://localhost:8501`
+
+**Features:**
+- ✅ BM25 Search (keyword-based)
+- ✅ Vector Search (semantic)
+- ✅ Hybrid Search (BM25 + Vector combined)
+- ✅ Score breakdown and result visualization
+
+### Step 4: Run Evaluation
+
+```bash
+python evaluation.py
+```
+
+**Output:** `evaluation_results.csv`, `evaluation_summary.json`, `EVALUATION_REPORT.md`
+
+### Architecture
+
+```
+Query
+  ├─→ BM25 Ranking        → Score normalization (0–100)
+  ├─→ Vector Search       → L2 distance → similarity (0–100)
+  └─→ Score Fusion        → Hybrid = 0.5 × BM25 + 0.5 × Vector
+```
+
+### Performance (Full Dataset — 1.62M docs)
+
+| Stage | Details |
+|-------|---------|
+| Embedding (GPU RTX 3050) | ~56 docs/s, ~8 hours total |
+| FAISS search latency | ~50ms per query |
+| Hybrid search latency | ~60ms per query |
+
+---
+
+## 10. 🤖 AI Usage & Transparency
 
 AI tools (e.g., ChatGPT) were used only as coding and reasoning assistants during the development process.
 
@@ -430,7 +528,7 @@ This ensures transparency and compliance with academic integrity requirements.
 
 ---
 
-## 10. 📝 Notes
+## 11. 📝 Notes
 
 The full dataset is not included in this repository due to size limitations
 

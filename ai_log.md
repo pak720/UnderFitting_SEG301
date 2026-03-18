@@ -804,6 +804,78 @@ Cập nhật số thứ tự các section còn lại
 
 ---
 
+### Date: 2026-03-17
+
+**Task:** Xây dựng vector indexer với GPU và producer-consumer pipeline
+
+**User:** Sửa lại code build vector index, dùng GPU chạy song song tiết kiệm thời gian
+
+**AI (Claude):**
+Thiết kế lại `src/indexer/vector_indexer.py` theo mô hình producer-consumer:
+- Producer thread: đọc JSONL và tiền xử lý text song song với GPU
+- Consumer (main thread): encode embeddings trên CUDA, overlap I/O với compute
+- Hỗ trợ FP16 (`--fp16`) để tăng tốc ~2× trên GPU
+- Batch size tự động (256 GPU / 32 CPU)
+- Tqdm progress bar với thông tin device, docs/s, checkpoint status
+
+---
+
+### Date: 2026-03-17
+
+**Task:** Thêm cơ chế resume khi build vector index
+
+**User:** Tạo thêm cơ chế resume khi build vector index; dừng bằng cách nào thì resume được, làm sao biết resume từ đâu
+
+**AI (Claude):**
+Triển khai hệ thống checkpoint gồm 3 file trong `vector_index/`:
+- `build_checkpoint.json` — lưu `lines_read`, `model_name`, `saved_at`
+- `build_docs.pkl` — documents và texts đã xử lý
+- `build_embeddings.npy` — embeddings đã tính
+
+Cơ chế: sau mỗi batch hoàn chỉnh, ghi checkpoint nguyên tử (write to `.tmp` → rename). Resume: đọc `lines_read` → skip các dòng đã xử lý → ghép embeddings cũ với mới. Dừng an toàn bằng Ctrl+C — KeyboardInterrupt handler log rõ dòng dừng và số docs đã embed.
+
+---
+
+### Date: 2026-03-17
+
+**Task:** Sửa lỗi WinError 2 khi resume — atomic rename thất bại
+
+**User:** Chạy lại báo lỗi `ERROR: [WinError 2] The system cannot find the file specified: 'vector_index\\build_embeddings.npy.tmp' -> 'vector_index\\build_embeddings.npy'`. Trong vector_index có file tên gần giống, hãy xem và sửa để resume được.
+
+**AI (Claude):**
+Xác định nguyên nhân: `np.save('build_embeddings.npy.tmp')` → numpy tự append `.npy` → file thực tế là `build_embeddings.npy.tmp.npy`, nhưng code rename tìm `build_embeddings.npy.tmp` → WinError 2.
+
+Sửa: đặt tên temp file là `build_embeddings.tmp.npy` (đã có `.npy`) → numpy không append thêm → rename hoạt động đúng.
+Xóa các file `.tmp` còn sót, giữ nguyên checkpoint (643072 docs). Resume từ dòng 643072.
+
+---
+
+### Date: 2026-03-17
+
+**Task:** Sửa lại requirements.txt và đường dẫn import trong app.py
+
+**User:** Đọc dự án, viết lại requirements không bị xung đột; sửa lại app.py, sửa lại các đường dẫn để import thư viện
+
+**AI (Claude):**
+- `requirements.txt`: pin các version tương thích (faiss-cpu, sentence-transformers, streamlit, torch, underthesea, pyvi)
+- `src/ui/app.py`: chuẩn hóa tất cả import về dạng `from src.ranking.*` và `from src.indexer.*`, thêm `sys.path` setup để chạy từ project root
+
+---
+
+### Date: 2026-03-18
+
+**Task:** Merge MILESTONE3_README vào README chính, bổ sung ai_log Milestone 3
+
+**User:** Hãy thêm phần readme của mil3 vào readme chính (sửa chỗ hướng dẫn build vector thành file build_vector_index trong indexer), và bổ sung ai_log chỗ phần của tôi (Hậu) theo cấu trúc đã có trong file
+
+**AI (Claude):**
+- Cập nhật Section 5 (File Structure) trong README.md thêm các file Milestone 3 mới
+- Thêm Section 9 🧠 Milestone 3 vào README.md: hướng dẫn build vector index bằng `python -m src.indexer.build_vector_index`, chạy web interface, evaluation, architecture diagram, performance table
+- Đổi số thứ tự Section 9 (AI Usage) → 10, Section 10 (Notes) → 11
+- Bổ sung các mục ai_log cho Hậu từ 2026-03-17 đến 2026-03-18
+
+---
+
 Thành viên 3: Duy
 ================================================================================
 CONVERSATION LOG - Web Scraping Script Development
