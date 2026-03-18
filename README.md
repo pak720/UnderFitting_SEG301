@@ -440,26 +440,26 @@ This milestone extends the search engine with semantic search capabilities and a
 ### Step 1: Build BM25 Index (if not done)
 
 ```bash
-python -m src.indexer.index_builder data_sample/sample_cleaned.jsonl
+python -m src.scripts.index_builder data_sample/sample_cleaned.jsonl
 ```
 
 ### Step 2: Build Vector Index
 
 ```bash
 # Basic (auto-detects GPU)
-python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl
+python -m src.scripts.build_vector_index data_sample/final_merged_3v6.jsonl
 
 # Specify output directory
-python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --index-dir vector_index
+python -m src.scripts.build_vector_index data_sample/final_merged_3v6.jsonl --index-dir vector_index
 
 # Force GPU + FP16 for ~2x speed
-python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --device cuda --fp16
+python -m src.scripts.build_vector_index data_sample/final_merged_3v6.jsonl --device cuda --fp16
 
 # Limit documents (for testing)
-python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --max-docs 1000
+python -m src.scripts.build_vector_index data_sample/final_merged_3v6.jsonl --max-docs 1000
 
 # Rebuild from scratch (ignore checkpoint)
-python -m src.indexer.build_vector_index data_sample/final_merged_3v6.jsonl --no-resume
+python -m src.scripts.build_vector_index data_sample/final_merged_3v6.jsonl --no-resume
 ```
 
 > **Resume:** If the process is interrupted (Ctrl+C), it saves a checkpoint automatically.
