@@ -445,7 +445,7 @@ python -m src.scripts.index_builder data_sample/sample_cleaned.jsonl
 
 ### Step 2: Build Vector Index
 
-```bash
+```bash l
 # Basic (auto-detects GPU)
 python -m src.scripts.build_vector_index data_sample/final_merged_3v6.jsonl
 
@@ -483,6 +483,18 @@ Then visit: `http://localhost:8501`
 - ✅ Vector Search (semantic)
 - ✅ Hybrid Search (BM25 + Vector combined)
 - ✅ Score breakdown and result visualization
+- ✅ **Filter** by operating status, province/city, and industry (sidebar)
+- ✅ **Pagination** — 10 results per page, navigable with ◀ / ▶ buttons
+
+**Filter Options (sidebar):**
+
+| Filter | Values |
+|--------|--------|
+| Tình trạng hoạt động | Tất cả / Đang hoạt động / Ngừng hoạt động |
+| Tỉnh / Thành phố | Free text (e.g. `Hà Nội`, `TP.HCM`) |
+| Ngành nghề | Free text (e.g. `công nghệ`, `xây dựng`) |
+
+Filters apply **after** search — no re-indexing needed. Changing any filter resets to page 1 automatically.
 
 ### Step 4: Run Evaluation
 

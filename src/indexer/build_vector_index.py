@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Build vector index from JSONL data."""
+"""Build vector index from JSONL data.
+
+Run from the project root:
+    python -m src.indexer.build_vector_index data_sample/final_merged.jsonl
+"""
 
 import argparse
 import sys
 import logging
 from pathlib import Path
 
-try:
-    from src.indexer.vector_indexer import VectorIndexer
-except ImportError:
-    from .vector_indexer import VectorIndexer
+from .vector_indexer import VectorIndexer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,7 +30,7 @@ def main():
         help='Output directory for the vector index'
     )
     parser.add_argument(
-        '--model', default='distiluse-base-multilingual-cased-v2',
+        '--model', default='intfloat/multilingual-e5-base',
         help='Sentence-Transformers model name'
     )
     parser.add_argument(

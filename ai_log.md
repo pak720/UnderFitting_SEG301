@@ -875,6 +875,37 @@ Xóa các file `.tmp` còn sót, giữ nguyên checkpoint (643072 docs). Resume 
 - Bổ sung các mục ai_log cho Hậu từ 2026-03-17 đến 2026-03-18
 
 ---
+### Date: 2026-03-19
+**Task:** Thêm tính năng Filter và Pagination vào giao diện Streamlit (`src/ui/app.py`)
+
+**User:**
+> "thêm phần Filter + Pagination vào giúp tôi"
+
+**AI (Claude Code):**
+
+Đọc toàn bộ file `src/ui/app.py` (402 dòng), phân tích cấu trúc hiện có, sau đó thực hiện các thay đổi sau:
+
+**Bộ lọc (Filter) – sidebar:**
+- Thêm selectbox **Tình trạng hoạt động**: Tất cả / Đang hoạt động / Ngừng hoạt động
+- Thêm text input **Tỉnh / Thành phố**: lọc substring trong trường `Địa chỉ`
+- Thêm text input **Ngành nghề**: lọc substring trong trường `Ngành nghề kinh doanh`
+- Hàm `_apply_filters()` xử lý lọc case-insensitive trên kết quả trả về từ search engine
+
+**Pagination:**
+- Hằng số `ITEMS_PER_PAGE = 10` (10 kết quả / trang)
+- Lưu kết quả vào `st.session_state['results']` sau mỗi lần search → không cần gọi lại search engine khi chuyển trang
+- Theo dõi `_filter_key` để tự reset về trang 1 khi bộ lọc thay đổi
+- Hàm `_render_pagination()` render nút ◀ Trước / Trang X / Y / Tiếp ▶ với disable logic
+- Tăng default `top_k` từ 10 → 50 để pagination có ý nghĩa (5 trang mặc định)
+
+**Stats bar** cập nhật thêm cột "Sau bộ lọc" và hiển thị các filter badge đang active.
+
+**Kỹ thuật đáng chú ý:**
+- Phân tách rõ hai luồng: (a) trigger search khi submit form, (b) render từ session_state khi chuyển trang → tránh re-search không cần thiết
+- `filter_key` tracking ngăn chặn state stale khi user đổi filter mà không search lại
+- Dùng `st.rerun()` sau khi cập nhật `session_state['page']` để reload đúng trang
+
+**File thay đổi:** `src/ui/app.py` (402 → 397 dòng sau refactor)
 
 Thành viên 3: Duy
 ================================================================================
@@ -1230,5 +1261,3 @@ CSV Format:
 ================================================================================
 
 
-
-## END OF AI INTERACTION LOG

@@ -1,175 +1,138 @@
+"""BM25 Ranker — uses compact numpy doc_lengths + DocStore for on-demand retrieval."""
 import math
 from typing import Dict, List, Tuple, Any, Optional
 from collections import defaultdict
 import heapq
 
+import numpy as np
+
+from src.indexer.doc_store import DocStore
+
 
 class BM25Ranker:
     def __init__(self,
                  inverted_index: Dict[str, List[Tuple[int, int]]],
-                 doc_info: Dict[int, Dict[str, Any]],
+                 doc_lengths: np.ndarray,
+                 doc_store: DocStore,
                  k1: float = 1.5,
                  b: float = 0.75):
-
+        """
+        Args:
+            inverted_index : term → [(doc_id, freq), …]
+            doc_lengths    : int32 array, doc_lengths[doc_id] = token count
+            doc_store      : DocStore for on-demand full-document retrieval
+        """
         self.inverted_index = inverted_index
-        self.doc_info = doc_info
+        self.doc_lengths    = doc_lengths
+        self.doc_store      = doc_store
         self.k1 = k1
-        self.b = b
+        self.b  = b
 
-        self.N = len(doc_info)
-        self.idf_cache = {}
+        self.N = len(doc_lengths)
+        self.avg_doc_length = float(doc_lengths.mean()) if self.N else 0.0
+        self.idf_cache: Dict[str, float] = {}
 
-        # Precompute avg doc length
-        self.avg_doc_length = sum(
-            doc['length'] for doc in doc_info.values()
-        ) / self.N if self.N > 0 else 0
+        # Precompute per-doc BM25 length normalisation factor (numpy, fast)
+        self.length_norm = np.where(
+            self.avg_doc_length > 0,
+            1.0 - b + b * (doc_lengths.astype(np.float32) / self.avg_doc_length),
+            1.0
+        )
 
-        # Precompute length normalization
-        self.length_norm = {
-            doc_id: 1 - b + b * (info['length'] / self.avg_doc_length)
-            for doc_id, info in doc_info.items()
-        }
-
-        # Token cache (IMPORTANT)
-        self.doc_token_cache: Dict[int, set] = {}
-
-        # Intent rules (converted to sets)
-        self.intent_column_rules = {
+        # Intent filtering: pre-build doc-id sets from the inverted index so
+        # we never load full document text during scoring.
+        self._intent_column_rules = {
             'technology': {
                 'positive': {'công_nghệ', 'công_nghệ_thông_tin', 'phần_mềm', 'dữ_liệu_lớn'},
-                'negative': {'khai_thác_than', 'than_cứng'}
+                'negative': {'khai_thác_than', 'than_cứng'},
             },
             'food_service': {
                 'positive': {'thực_phẩm', 'ăn_uống', 'dịch_vụ_ăn_uống'},
-                'negative': {'dược_phẩm', 'thuốc'}
-            }
+                'negative': {'dược_phẩm', 'thuốc'},
+            },
+        }
+        all_intent_terms: set = set()
+        for rule in self._intent_column_rules.values():
+            all_intent_terms |= rule['positive'] | rule['negative']
+
+        self._intent_doc_sets: Dict[str, frozenset] = {
+            term: frozenset(doc_id for doc_id, _ in inverted_index[term])
+            if term in inverted_index else frozenset()
+            for term in all_intent_terms
         }
 
-    # ===============================
-    # Token handling
-    # ===============================
-
-    def _get_doc_tokens(self, doc_id: int) -> set:
-        if doc_id in self.doc_token_cache:
-            return self.doc_token_cache[doc_id]
-
-        original_doc = self.doc_info[doc_id]['original_doc']
-
-        combined_text = ' '.join([
-            str(original_doc.get('Tên doanh nghiệp', '')).lower(),
-            str(original_doc.get('Tên giao dịch', '')).lower(),
-            str(original_doc.get('Ngành nghề kinh doanh', '')).lower(),
-            str(original_doc.get('Địa chỉ', '')).lower(),
-        ])
-
-        tokens = set(combined_text.split())
-        self.doc_token_cache[doc_id] = tokens
-        return tokens
-
-    # ===============================
+    # ------------------------------------------------------------------
     # IDF
-    # ===============================
+    # ------------------------------------------------------------------
 
     def _compute_idf(self, term: str) -> float:
         if term in self.idf_cache:
             return self.idf_cache[term]
-
         if term not in self.inverted_index:
-            idf = 0
+            idf = 0.0
         else:
             n = len(self.inverted_index[term])
             idf = math.log((self.N - n + 0.5) / (n + 0.5) + 1)
-
         self.idf_cache[term] = idf
         return idf
 
-    # ===============================
-    # BM25 scoring
-    # ===============================
+    # ------------------------------------------------------------------
+    # BM25 score
+    # ------------------------------------------------------------------
 
-    def _compute_bm25_score(self,
-                            term: str,
-                            doc_id: int,
-                            term_freq: int) -> float:
+    def _compute_bm25_score(self, term: str, doc_id: int,
+                             term_freq: int) -> float:
+        idf  = self._compute_idf(term)
+        norm = float(self.length_norm[doc_id])
+        tf   = term_freq * (self.k1 + 1) / (term_freq + self.k1 * norm)
+        return idf * tf
 
-        idf = self._compute_idf(term)
-        norm = self.length_norm[doc_id]
+    # ------------------------------------------------------------------
+    # Intent filtering (no disk I/O — uses pre-built doc-id frozensets)
+    # ------------------------------------------------------------------
 
-        numerator = term_freq * (self.k1 + 1)
-        denominator = term_freq + self.k1 * norm
-
-        return idf * (numerator / denominator)
-
-    # ===============================
-    # Intent filtering
-    # ===============================
-
-    def _doc_passes_intent(self,
-                           doc_id: int,
-                           intent_group: Optional[str]) -> bool:
-
+    def _doc_passes_intent(self, doc_id: int,
+                            intent_group: Optional[str]) -> bool:
         if not intent_group:
             return True
-
-        rule = self.intent_column_rules.get(intent_group)
+        rule = self._intent_column_rules.get(intent_group)
         if not rule:
             return True
+        has_pos = any(doc_id in self._intent_doc_sets.get(t, frozenset())
+                      for t in rule['positive'])
+        has_neg = any(doc_id in self._intent_doc_sets.get(t, frozenset())
+                      for t in rule['negative'])
+        return has_pos and not has_neg
 
-        tokens = self._get_doc_tokens(doc_id)
-
-        positive = rule['positive']
-        negative = rule['negative']
-
-        has_positive = bool(tokens & positive) if positive else True
-        has_negative = bool(tokens & negative) if negative else False
-
-        return has_positive and not has_negative
-
-    # ===============================
-    # Keyword boost (FAST)
-    # ===============================
-
-    def _compute_keyword_boost(self,
-                               doc_id: int,
-                               query_terms: List[str]) -> float:
-
-        tokens = self._get_doc_tokens(doc_id)
-
-        overlap = len(tokens & set(query_terms))
-        return overlap * 0.8
-
-    # ===============================
+    # ------------------------------------------------------------------
     # Ranking
-    # ===============================
+    # ------------------------------------------------------------------
 
     def rank_documents(self,
                        query_terms: List[str],
                        top_k: int = 10,
                        intent_group: Optional[str] = None
                        ) -> List[Tuple[int, float, Any]]:
-
+        """
+        Returns [(doc_id, score, doc_dict), …] sorted by score descending.
+        Full document content is fetched from DocStore only for the top-k hits.
+        """
         if not query_terms:
             return []
 
         query_terms = list(dict.fromkeys(query_terms))
+        candidate_docs: Dict[int, float] = defaultdict(float)
 
-        candidate_docs = defaultdict(float)
-
-        # BM25 scoring
         for term in query_terms:
             if term not in self.inverted_index:
                 continue
-
-            postings = self.inverted_index[term]
-
-            for doc_id, term_freq in postings:
-                score = self._compute_bm25_score(term, doc_id, term_freq)
-                candidate_docs[doc_id] += score
+            for doc_id, term_freq in self.inverted_index[term]:
+                candidate_docs[doc_id] += self._compute_bm25_score(
+                    term, doc_id, term_freq)
 
         if not candidate_docs:
             return []
 
-        # Intent filtering (FAST)
         if intent_group:
             candidate_docs = {
                 doc_id: score
@@ -180,25 +143,22 @@ class BM25Ranker:
         if not candidate_docs:
             return []
 
-        # Keyword boost
-        for doc_id in candidate_docs:
-            candidate_docs[doc_id] += self._compute_keyword_boost(
-                doc_id, query_terms
-            )
+        top_docs = heapq.nlargest(top_k, candidate_docs.items(), key=lambda x: x[1])
 
-        # Top K
-        top_docs = heapq.nlargest(
-            top_k,
-            candidate_docs.items(),
-            key=lambda x: x[1]
-        )
+        # Fetch full documents in offset order (sequential reads = fast)
+        doc_ids = [doc_id for doc_id, _ in top_docs]
+        docs    = self.doc_store.get_many(doc_ids)
 
-        results = []
-        for doc_id, score in top_docs:
-            results.append((
-                doc_id,
-                score,
-                self.doc_info[doc_id]['original_doc']
-            ))
+        return [(doc_id, score, docs[doc_id]) for doc_id, score in top_docs]
 
-        return results
+    def explain_score(self, query_terms: List[str],
+                      doc_id: int) -> Dict[str, Any]:
+        explanation: Dict[str, Any] = {'doc_id': doc_id, 'terms': {}}
+        for term in query_terms:
+            if term not in self.inverted_index:
+                continue
+            freq = next(
+                (f for d, f in self.inverted_index[term] if d == doc_id), 0)
+            score = self._compute_bm25_score(term, doc_id, freq) if freq else 0.0
+            explanation['terms'][term] = {'freq': freq, 'score': score}
+        return explanation

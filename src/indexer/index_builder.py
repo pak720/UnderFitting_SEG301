@@ -45,7 +45,7 @@ def main():
         print(" " * 25 + "🏗️  INDEX BUILDER")
         print("="*80 + "\n")
 
-        merged_index, doc_info = indexer.build_index(args.jsonl_file)
+        indexer.build_index(args.jsonl_file)
 
         print("\n" + "="*80)
         print(" " * 20 + "✅ INDEX BUILDING COMPLETE!")
