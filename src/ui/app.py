@@ -295,26 +295,29 @@ def _render_result(rank: int, doc_id: int, score: float, doc: dict,
             '</div>'
         )
 
-    st.markdown(f"""
-    <div class="result-card">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div style="flex:1; min-width:0;">
-                <div class="result-rank">#{rank}</div>
-                <div class="result-name">{name}</div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 24px;">
-                    <div class="result-field"><span>Mã số thuế:</span> {tax_id}</div>
-                    <div class="result-field"><span>Địa chỉ:</span> {address}</div>
-                    <div class="result-field"><span>Ngành nghề:</span> {industry}</div>
-                    <div class="result-field"><span>Trạng thái:</span> {_status_html(status)}</div>
-                </div>
-                {sub_html}
-            </div>
-            <div style="margin-left:16px; flex-shrink:0;">
-                <span class="score-badge {badge_cls}">Score: {score:.2f}</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # NOTE: Streamlit's Markdown parser treats lines with ≥4 leading spaces as code
+    # blocks, so this HTML must stay as a compact single-string (no indented newlines).
+    html = (
+        '<div class="result-card">'
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+        '<div style="flex:1;min-width:0;">'
+        f'<div class="result-rank">#{rank}</div>'
+        f'<div class="result-name">{name}</div>'
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;">'
+        f'<div class="result-field"><span>Mã số thuế:</span> {tax_id}</div>'
+        f'<div class="result-field"><span>Địa chỉ:</span> {address}</div>'
+        f'<div class="result-field"><span>Ngành nghề:</span> {industry}</div>'
+        f'<div class="result-field"><span>Trạng thái:</span> {_status_html(status)}</div>'
+        '</div>'
+        f'{sub_html}'
+        '</div>'
+        '<div style="margin-left:16px;flex-shrink:0;">'
+        f'<span class="score-badge {badge_cls}">Score: {score:.2f}</span>'
+        '</div>'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def _apply_filters(results: list, status_filter: str,

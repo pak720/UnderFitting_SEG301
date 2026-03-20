@@ -38,8 +38,12 @@ class VectorSearcher:
         # SentenceTransformer — needed to encode each query at search time
         self.model = SentenceTransformer(self.model_name, device=device)
 
-        # FAISS index (IndexFlatIP — exact cosine similarity)
+        # FAISS index
         self.index = faiss.read_index(str(index_dir / 'vector.index'))
+        # Restore nprobe for IVFPQ indexes (not always persisted in index file)
+        nprobe = metadata.get('nprobe')
+        if nprobe and hasattr(self.index, 'nprobe'):
+            self.index.nprobe = nprobe
 
         # Compact offset array (replaces id_to_doc.pkl ~844 MB → 12 MB)
         idx_offsets = np.load(str(index_dir / 'idx_offsets.npy'))
