@@ -1,10 +1,37 @@
 """Hybrid Search — combines BM25 and Vector Search scores."""
 
-from typing import List, Dict, Tuple, Any
+import unicodedata
+from typing import List, Dict, Tuple, Any, Optional
 import logging
-from collections import defaultdict
 
 logger = logging.getLogger(__name__)
+
+_GEO_TERMS = {
+    'hà nội', 'hồ chí minh', 'đà nẵng', 'hải phòng', 'cần thơ',
+    'bình dương', 'đồng nai', 'long an', 'bình định', 'khánh hòa',
+    'thanh hóa', 'nghệ an', 'thái nguyên', 'bắc ninh', 'quảng ninh',
+    'lâm đồng', 'đắk lắk', 'bình thuận', 'tây ninh', 'bình phước',
+    'hà tĩnh', 'quảng nam', 'quảng ngãi', 'phú yên', 'vĩnh long',
+    'tiền giang', 'bến tre', 'trà vinh', 'an giang', 'kiên giang',
+    'cà mau', 'đồng tháp', 'hải dương', 'hưng yên', 'nam định',
+    'ninh bình', 'thái bình', 'vĩnh phúc', 'bắc giang', 'phú thọ',
+    'yên bái', 'hòa bình', 'lạng sơn', 'cao bằng', 'điện biên',
+    'lai châu', 'hà giang', 'tuyên quang', 'sơn la',
+}
+
+
+def _norm(s: str) -> str:
+    return unicodedata.normalize('NFC', s).lower()
+
+
+def _detect_geo(query: str) -> Optional[str]:
+    """Return the first Vietnamese province/city name found in query, or None."""
+    q = _norm(query)
+    # Longer names first to avoid partial match (e.g. "hồ chí minh" before "minh")
+    for geo in sorted(_GEO_TERMS, key=len, reverse=True):
+        if geo in q:
+            return geo
+    return None
 
 
 class HybridSearch:
@@ -102,6 +129,23 @@ class HybridSearch:
             ranked.append((doc_id, hybrid, doc))
 
         ranked.sort(key=lambda x: x[1], reverse=True)
+
+        # Hard geo filter: when query contains a province/city name, only keep
+        # docs whose address field contains that name (NFC-normalised).
+        # Fixes vector search contamination — embeddings of similar province names
+        # (e.g. "bình định" vs "bình dương") are too close in vector space, so
+        # vector results bleed wrong provinces into the hybrid ranking.
+        detected_geo = _detect_geo(query)
+        if detected_geo:
+            geo_filtered = [
+                (doc_id, score, doc) for doc_id, score, doc in ranked
+                if detected_geo in _norm(doc.get('Địa chỉ', ''))
+            ]
+            if geo_filtered:
+                return geo_filtered[:top_k]
+            # Fallback: province may be sparse in index — return unfiltered
+            logger.warning(f"Geo filter '{detected_geo}' matched 0 docs — returning unfiltered")
+
         return ranked[:top_k]
 
     def set_weights(self, bm25_weight: float, vector_weight: float) -> None:

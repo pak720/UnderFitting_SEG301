@@ -75,9 +75,51 @@ class VectorSearcher:
         # Normalise to match how the index was built
         faiss.normalize_L2(query_vec)
 
-        # Over-fetch to get top_k unique docs after multi-field grouping
-        fetch_k = min(top_k * self.num_fields * 3,
-                      self.num_documents * self.num_fields)
+        # --- Multi-field grouping strategy ---
+        # Each document occupies num_fields consecutive FAISS slots:
+        #   slot 0 → name embedding
+        #   slot 1 → industry embedding
+        #   slot 2 → address/province embedding
+        #   slot 3 → full-document embedding  (last slot)
+        #
+        # Strategy:
+        #   Default: MAX over all field embeddings (works for most queries).
+        #   Multi-concept (industry + geo): use ONLY full-doc slot so the model
+        #     must find both concepts together, preventing a single-field match
+        #     from dominating (e.g. "công nghệ hà nội" → industry AND location).
+        #
+        # Multi-concept detection: query must contain a Vietnamese city/province
+        # phrase. Pure domain queries like "vận chuyển hàng hóa" are single-concept
+        # even if they have many words — forcing full-doc only causes 0 results.
+        nf = self.num_fields
+        full_doc_slot = nf - 1   # last slot is always full-doc
+
+        _GEO_TERMS = {
+            'hà_nội', 'hồ_chí_minh', 'đà_nẵng', 'hải_phòng', 'cần_thơ',
+            'bình_dương', 'đồng_nai', 'long_an', 'bình_định', 'khánh_hòa',
+            'thanh_hóa', 'nghệ_an', 'thái_nguyên', 'bắc_ninh', 'quảng_ninh',
+            'lâm_đồng', 'đắk_lắk', 'bình_thuận', 'tây_ninh', 'bình_phước',
+            'hà_tĩnh', 'quảng_nam', 'quảng_ngãi', 'phú_yên', 'vĩnh_long',
+        }
+        import unicodedata
+
+        def _norm(s: str) -> str:
+            return unicodedata.normalize('NFC', s).lower()
+
+        query_lower = _norm(query)
+        detected_geo = next(
+            (geo.replace('_', ' ') for geo in _GEO_TERMS
+             if geo.replace('_', ' ') in query_lower),
+            None
+        )
+        is_multi_concept = detected_geo is not None
+
+        # Fetch more candidates when multi-concept so slot-3 coverage is sufficient.
+        # multi-concept: fetch_k = top_k * nf * 20 → enough full-doc hits after geo filter
+        # default:       fetch_k = top_k * nf * 5
+        fetch_multiplier = 20 if is_multi_concept else 5
+        fetch_k = min(top_k * nf * fetch_multiplier,
+                      self.num_documents * nf)
         distances, indices = self.index.search(query_vec, k=fetch_k)
 
         valid = [(int(idx), float(dist))
@@ -87,45 +129,49 @@ class VectorSearcher:
         if not valid:
             return []
 
-        # --- Multi-field grouping ---
-        # Each document occupies num_fields consecutive FAISS slots:
-        #   slot 0 → name embedding
-        #   slot 1 → industry embedding
-        #   slot 2 → address/province embedding
-        #   slot 3 → full-document embedding  (last slot)
-        #
-        # Strategy:
-        #   Short queries (1-2 words): MAX over all field embeddings — the
-        #     dedicated field embedding wins cleanly (e.g. "bình định" → address).
-        #   Long queries (3+ words): use ONLY the full-doc embedding so the
-        #     model must find both/all concepts in a single passage, preventing
-        #     a single-field match from winning (e.g. "công nghệ hà nội").
-        nf = self.num_fields
-        full_doc_slot = nf - 1   # last slot is always full-doc
-        is_multi_concept = len(query.strip().split()) >= 3
-
         doc_best: dict = {}
         for faiss_idx, inner_product in valid:
             doc_id    = faiss_idx // nf
             field_idx = faiss_idx % nf
 
             if is_multi_concept and field_idx != full_doc_slot:
-                continue   # ignore per-field embeddings for long queries
+                continue   # ignore per-field embeddings for geo queries
 
             if doc_id not in doc_best or inner_product > doc_best[doc_id]:
                 doc_best[doc_id] = inner_product
 
-        ranked = sorted(doc_best.items(), key=lambda kv: kv[1], reverse=True)[:top_k]
+        # Sort all candidates — we need more than top_k to geo-filter
+        all_ranked = sorted(doc_best.items(), key=lambda kv: kv[1], reverse=True)
 
+        # For geo queries: fetch a larger pool and hard-filter by address field.
+        # Fixes "bình định" vs "bình dương" confusion — embeddings are too similar
+        # for the model to distinguish Vietnamese province names reliably.
+        if detected_geo:
+            pool_size = min(len(all_ranked), top_k * 10)
+            pool_ids  = [doc_id for doc_id, _ in all_ranked[:pool_size]]
+            pool_docs = self.doc_store.get_many(pool_ids)
+
+            results = []
+            for doc_id, inner_product in all_ranked[:pool_size]:
+                doc     = pool_docs[doc_id]
+                address = _norm(doc.get('Địa chỉ', ''))
+                if detected_geo in address:
+                    score = max(0.0, inner_product) * 100.0
+                    results.append((doc_id, score, doc))
+                if len(results) >= top_k:
+                    break
+
+            # Fallback: if no docs match the geo filter (sparse province),
+            # return unfiltered top_k so the page isn't empty.
+            if results:
+                return results
+
+        ranked  = all_ranked[:top_k]
         doc_ids = [doc_id for doc_id, _ in ranked]
         docs    = self.doc_store.get_many(doc_ids)
 
-        results = []
-        for doc_id, inner_product in ranked:
-            score = max(0.0, inner_product) * 100.0
-            results.append((doc_id, score, docs[doc_id]))
-
-        return results
+        return [(doc_id, max(0.0, ip) * 100.0, docs[doc_id])
+                for doc_id, ip in ranked]
 
     def search_with_explanation(self,
                                 query: str,

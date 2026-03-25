@@ -322,6 +322,13 @@ class TextPreprocessor:
         expanded_terms: List[str] = []
         intent_terms: List[str] = []
 
+        # Detect city/province terms in query — when present, skip intent expansion
+        # so geographic terms are not diluted by domain-expansion noise.
+        # e.g. "nhà hàng hà nội" → hà_nội suppresses food_service expansion,
+        # ensuring docs in Hà Nội are not outscored by TP HCM F&B corpus.
+        city_phrase_set = {('_'.join(p)) for p in self._city_phrase_tuples}
+        has_geo_term = any(t in city_phrase_set for t in base_terms)
+
         # Detect which intent groups are activated by the query.
         # If any group matches, expansion is restricted to that group only.
         # This is the key improvement to reduce overlapping keyword noise.
@@ -343,10 +350,13 @@ class TextPreprocessor:
             if term not in self.generic_query_terms:
                 intent_terms.append(term)
 
-        # Group-aware expansion for precision.
-        for group_name in activated_groups:
-            for expansion in self.intent_groups[group_name]['expansions']:
-                expanded_terms.extend(_expand_term(expansion))
+        # Group-aware expansion — suppressed when a geographic term is present.
+        # Reason: expansion adds many docs from the dominant region (e.g. TP HCM)
+        # and overwhelms the location signal from the city phrase.
+        if not has_geo_term:
+            for group_name in activated_groups:
+                for expansion in self.intent_groups[group_name]['expansions']:
+                    expanded_terms.extend(_expand_term(expansion))
 
         # Keep order but remove duplicates.
         expanded_terms = list(dict.fromkeys(expanded_terms))

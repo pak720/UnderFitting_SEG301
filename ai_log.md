@@ -907,6 +907,178 @@ Xóa các file `.tmp` còn sót, giữ nguyên checkpoint (643072 docs). Resume 
 
 **File thay đổi:** `src/ui/app.py` (402 → 397 dòng sau refactor)
 
+---
+### Date: 2026-03-19
+**Task:** Fix lỗi giao diện — raw HTML hiển thị trong result cards
+
+**User:**
+> "[screenshot] bị lỗi giao diện rồi"
+
+**AI (Claude Code):**
+
+Xác định nguyên nhân: `st.markdown()` với f-string nhiều dòng có indent 4 dấu cách — Streamlit hiểu đây là code block (markdown syntax), không render HTML.
+
+Fix: viết lại `_render_result()` dùng chuỗi HTML đơn, không xuống dòng, không indent:
+```python
+html = (f'<div class="result-card">...'
+        f'<span class="score-badge ...">{score:.1f}</span>'
+        f'...</div>')
+st.markdown(html, unsafe_allow_html=True)
+```
+
+**File thay đổi:** `src/ui/app.py`
+
+---
+### Date: 2026-03-19
+**Task:** Fix BM25 "nhà hàng hà nội" trả về kết quả TP HCM và Bình Dương
+
+**User:**
+> "khi tôi search bm25 nhà hàng hà nội thì kết quả ra tp hcm với bình dương, k ra hà nội. hãy xem lại logic"
+
+**AI (Claude Code):**
+
+Phân tích: intent expansion nhóm `food_service` thêm 5 terms phụ (thực_phẩm, ăn_uống, ...) → TP HCM có nhiều tài liệu F&B hơn → dominate BM25 score → địa danh "hà_nội" bị lấn át.
+
+Fix trong `src/indexer/preprocessor.py`: thêm cơ chế geographic-aware — khi query chứa tên tỉnh/thành, tắt intent group expansion:
+```python
+city_phrase_set = {('_'.join(p)) for p in self._city_phrase_tuples}
+has_geo_term = any(t in city_phrase_set for t in base_terms)
+if not has_geo_term:
+    for group_name in activated_groups:
+        expanded_terms.extend(...)
+```
+Kết quả: `"nhà hàng hà nội"` → chỉ 2 terms `[nhà_hàng, hà_nội]`, không bị expansion.
+
+**File thay đổi:** `src/indexer/preprocessor.py`
+
+---
+### Date: 2026-03-20
+**Task:** Tối ưu RAM khi build vector index 4 field (streaming binary checkpoint)
+
+**User:**
+> "có cách nào tối ưu index khi build 4 field không" / "giảm [ram] đi"
+
+**AI (Claude Code):**
+
+Vấn đề: 1.62M docs × 4 fields × 768 dim × 4 bytes ≈ 20GB nếu giữ toàn bộ embeddings trong RAM.
+
+Giải pháp — streaming binary file:
+- Mỗi batch sau khi encode được ghi xuống `build_embeddings.bin` (raw float32 bytes) ngay lập tức, không tích lũy trong RAM
+- Khi build FAISS: đọc qua `np.memmap()` — không copy toàn bộ vào RAM
+- RAM tối đa thực tế: `batch_size × 4 × 768 × 4 bytes` ≈ vài trăm MB
+
+**File thay đổi:** `src/indexer/vector_indexer.py`
+
+---
+### Date: 2026-03-20
+**Task:** Fix vector search trả về 0 kết quả cho "vận chuyển hàng hóa"
+
+**User:**
+> "vector search hơi lỗi. khi tôi tìm vận chuyển thì ra kết quả, nhưng khi search vận chuyển hàng hóa lại k ra kq nào"
+
+**AI (Claude Code):**
+
+Phân tích: `is_multi_concept = len(query.split()) >= 3` flagged mọi query ≥ 3 từ → bật chế độ full-doc-only slot với `fetch_k = top_k * nf * 20`. Với `nf=4` và `top_k=30`, `fetch_k=2400` nhưng index chỉ có ~600 full-doc slots trong top candidates → trả về 0 kết quả.
+
+Fix: đổi `is_multi_concept` từ word-count sang **geo-term detection**:
+```python
+detected_geo = next(
+    (geo.replace('_', ' ') for geo in _GEO_TERMS
+     if geo.replace('_', ' ') in query_lower), None)
+is_multi_concept = detected_geo is not None
+```
+Query đơn khái niệm như "vận chuyển hàng hóa" → `is_multi_concept=False` → MAX over all slots → kết quả bình thường.
+
+**File thay đổi:** `src/ranking/vector_searcher.py`
+
+---
+### Date: 2026-03-20
+**Task:** Fix filter tỉnh/thành trả về 0 kết quả do Unicode NFC/NFD mismatch
+
+**User:**
+> "có vấn đề với logic search vector. khi tôi search nhà hàng, có 1 nhà hàng ở bình định nằm top đầu, nhưng khi tôi filter bình định thì kết quả trả lại là 0"
+
+**AI (Claude Code):**
+
+Phân tích: filter dùng `.lower()` thông thường — dữ liệu JSONL có thể lưu ở NFD (decomposed), filter input ở NFC → cùng chữ nhưng khác byte sequence → `in` trả False.
+
+Fix trong `_apply_filters()` — thêm Unicode NFC normalization trước khi so sánh:
+```python
+def _norm(s): return unicodedata.normalize('NFC', s).lower()
+prov_norm = _norm(province_filter)
+if prov_norm and prov_norm not in _norm(doc.get('Địa chỉ', '')):
+    return False
+```
+
+**File thay đổi:** `src/ui/app.py`
+
+---
+### Date: 2026-03-20
+**Task:** Fix "nhà hàng bình định" trả về Bình Dương (province confusion)
+
+**User:**
+> "còn khi search nhà hàng bình định thì nhà hàng ở bình dương lại có kq cao nhất" / "lõi đó vẫn chưa được fix, kết quả vẫn như cũ"
+
+**AI (Claude Code):**
+
+Phân tích: embedding của "bình định" và "bình dương" rất gần trong vector space → FAISS IVFPQ trả về Bình Dương nhiều hơn (corpus lớn hơn). Fix trong `vector_searcher.py` riêng không đủ vì Hybrid fusion vẫn có thể trộn kết quả.
+
+Fix toàn diện — hard geo-filter sau search/fusion ở cả 3 nơi:
+
+1. **`src/ranking/hybrid_search.py`**: thêm `_detect_geo()`, `_GEO_TERMS`, `_norm()` ở module level; sau fusion sort → hard-filter `detected_geo in _norm(doc['Địa chỉ'])`
+2. **`src/ranking/vector_searcher.py`**: pool top-k×10 candidates → hard-filter address field → fallback unfiltered nếu sparse
+3. **`src/ui/app.py`**: sau search BM25/Vector mode, apply same hard geo-filter
+
+Tất cả dùng Unicode NFC normalization nhất quán.
+
+**File thay đổi:** `src/ranking/hybrid_search.py`, `src/ranking/vector_searcher.py`, `src/ui/app.py`
+
+---
+### Date: 2026-03-20
+**Task:** Fix Smart Filter — "điện tử" + filter "hà nội" trả về 0 kết quả
+
+**User:**
+> "xem lại bộ lọc, logic đúng chưa, khi tôi search điện tử hà nội thì ổn, nhưng search điện tử, lọc hà nội thì k ra kq"
+
+**AI (Claude Code):**
+
+Phân tích: filter chỉ là post-filter trên top-k kết quả đã lấy — nếu top-50 docs không có tài liệu nào ở Hà Nội thì 0 kết quả dù tồn tại trong index.
+
+Fix: khi filter tỉnh/thành hoặc ngành nghề thay đổi, **tự động re-search** với `effective_query = base_query + province + industry`:
+```python
+effective_query = _build_effective_query(base_query, province_filter, industry_filter)
+# Triggers new search → results contain geo-relevant docs
+```
+- Post-filter (tình trạng) vẫn hoạt động bình thường trên kết quả mới
+- Session state theo dõi `text_filter_key` để detect khi filter thay đổi
+
+**File thay đổi:** `src/ui/app.py`
+
+---
+### Date: 2026-03-24
+**Task:** Viết lại báo cáo Milestone 3 với phần so sánh 3 phương pháp
+
+**User:**
+> "viết lại report với các phần đang có (tôi đã sửa). thêm 1 phần là ví dụ search, so sánh cả 3 method"
+
+**AI (Claude Code):**
+
+Viết lại toàn bộ `report_milstone3.md` gồm 10 sections:
+1. Tổng quan
+2. Vector Search — model, 4-slot strategy, FAISS IVFPQ, RAM optimization, hard geo-filter
+3. Hybrid Search — công thức, quy trình, lý do trọng số 65/35
+4. Web Interface — tính năng, Smart Filter, Geographic-aware BM25
+5. **So sánh 3 phương pháp** — 5 ví dụ thực tế: ngữ nghĩa, địa lý, tên tỉnh dễ nhầm, query đơn, tiếng Anh
+6. Evaluation — metrics Precision@10 / Recall@10 / MRR
+7. Kiến trúc tổng thể (ASCII diagram)
+8. Hiệu năng hệ thống
+9. Hướng dẫn chạy
+10. AI Usage Log
+
+**File thay đổi:** `report_milstone3.md`
+
+---
+
 Thành viên 3: Duy
 ================================================================================
 CONVERSATION LOG - Web Scraping Script Development

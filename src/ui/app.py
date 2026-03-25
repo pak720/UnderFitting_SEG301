@@ -323,20 +323,28 @@ def _render_result(rank: int, doc_id: int, score: float, doc: dict,
 def _apply_filters(results: list, status_filter: str,
                    province_filter: str, industry_filter: str) -> list:
     """Filter results by status, province, and industry (case-insensitive substring)."""
+    import unicodedata
+
+    def _norm(s: str) -> str:
+        return unicodedata.normalize('NFC', s).lower()
+
+    prov_norm = _norm(province_filter)
+    ind_norm  = _norm(industry_filter)
+
     filtered = []
     for item in results:
         _, _, doc = item
         status   = doc.get('Tình trạng hoạt động', '')
-        address  = doc.get('Địa chỉ', '')
-        industry = doc.get('Ngành nghề kinh doanh', '')
+        address  = _norm(doc.get('Địa chỉ', ''))
+        industry = _norm(doc.get('Ngành nghề kinh doanh', ''))
 
-        if status_filter == "Đang hoạt động" and 'đang hoạt động' not in status.lower():
+        if status_filter == "Đang hoạt động" and 'đang hoạt động' not in _norm(status):
             continue
-        if status_filter == "Ngừng hoạt động" and 'đang hoạt động' in status.lower():
+        if status_filter == "Ngừng hoạt động" and 'đang hoạt động' in _norm(status):
             continue
-        if province_filter and province_filter.lower() not in address.lower():
+        if prov_norm and prov_norm not in address:
             continue
-        if industry_filter and industry_filter.lower() not in industry.lower():
+        if ind_norm and ind_norm not in industry:
             continue
 
         filtered.append(item)
@@ -446,21 +454,41 @@ def main():
         with col2:
             search_btn = st.form_submit_button("🔍 Tìm kiếm", use_container_width=True)
 
-    # ── Trigger new search on submit ─────────
-    if search_btn and query:
+    # ── Build effective query (incorporates text filters) ────────────────
+    # Province and industry filters augment the search query so ranking itself
+    # is location/domain aware — not just a post-filter on a fixed top-k pool.
+    # Status filter stays as pure post-filter (it's not a semantic concept).
+    def _build_effective_query(base: str, province: str, industry: str) -> str:
+        parts = [p.strip() for p in [base, province, industry] if p.strip()]
+        return ' '.join(parts)
+
+    # ── Decide whether to (re-)run search ────────────────────────────────
+    # Re-search when: (a) user clicked Search, or (b) text filters changed
+    # while a previous query exists.
+    text_filter_key = f"{province_filter}|{industry_filter}"
+    prev_text_filter_key = st.session_state.get('_text_filter_key', '')
+    text_filters_changed = (
+        text_filter_key != prev_text_filter_key
+        and 'last_base_query' in st.session_state
+    )
+    should_search = (search_btn and query) or text_filters_changed
+
+    if should_search:
+        base_query = query if (search_btn and query) else st.session_state['last_base_query']
+        effective_query = _build_effective_query(base_query, province_filter, industry_filter)
         t0 = time.time()
         try:
             if search_method == "BM25 Search":
-                query_terms, _ = system['preprocessor'].build_search_terms(query)
+                query_terms, _ = system['preprocessor'].build_search_terms(effective_query)
                 results = system['bm25'].rank_documents(query_terms=query_terms, top_k=top_k)
                 badge_cls = 'bm25-badge'
                 method_label = '📝 BM25'
             elif search_method == "Vector Search":
-                results = system['vector'].search(query, top_k=top_k)
+                results = system['vector'].search(effective_query, top_k=top_k)
                 badge_cls = 'vector-badge'
                 method_label = '🤖 Vector'
             else:
-                results = system['hybrid'].search(query, top_k=top_k, return_details=True)
+                results = system['hybrid'].search(effective_query, top_k=top_k, return_details=True)
                 badge_cls = 'hybrid-badge'
                 method_label = '⚡ Hybrid'
         except Exception as exc:
@@ -469,12 +497,28 @@ def main():
             return
 
         elapsed_ms = (time.time() - t0) * 1000
+
+        # Hard geo filter for BM25/Vector modes (Hybrid handles it internally).
+        # Removes docs whose address doesn't match the detected province name.
+        from src.ranking.hybrid_search import _detect_geo, _norm as _hnorm
+        if search_method != "Hybrid Search":
+            detected_geo = _detect_geo(effective_query)
+            if detected_geo:
+                geo_filtered = [
+                    (doc_id, score, doc) for doc_id, score, doc in results
+                    if detected_geo in _hnorm(doc.get('Địa chỉ', ''))
+                ]
+                if geo_filtered:
+                    results = geo_filtered
+
         st.session_state.update({
             'results': results,
-            'last_query': query,
+            'last_base_query': base_query,
+            'last_query': effective_query,
             'badge_cls': badge_cls,
             'method_label': method_label,
             'elapsed_ms': elapsed_ms,
+            '_text_filter_key': text_filter_key,
             'page': 1,
         })
 
@@ -483,7 +527,9 @@ def main():
         return
 
     # ── Apply filters ─────────────────────────
-    # Reset page to 1 when filter values change
+    # Status filter is still applied as post-filter.
+    # Province/industry are already in the query so _apply_filters just
+    # acts as a safety net to remove any stragglers that slipped through.
     filter_key = f"{status_filter}|{province_filter}|{industry_filter}"
     if st.session_state.get('_filter_key') != filter_key:
         st.session_state['_filter_key'] = filter_key
